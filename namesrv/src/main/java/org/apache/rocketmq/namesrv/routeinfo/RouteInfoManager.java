@@ -49,10 +49,15 @@ public class RouteInfoManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
     private final static long BROKER_CHANNEL_EXPIRED_TIME = 1000 * 60 * 2;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    // topic 消息队列路由信息  发送时候使用
     private final HashMap<String/* topic */, List<QueueData>> topicQueueTable;
+    // broker 地址  路由表处理
     private final HashMap<String/* brokerName */, BrokerData> brokerAddrTable;
+    // 集群地址表
     private final HashMap<String/* clusterName */, Set<String/* brokerName */>> clusterAddrTable;
+    // broker最后的心跳相关信息
     private final HashMap<String/* brokerAddr */, BrokerLiveInfo> brokerLiveTable;
+    //
     private final HashMap<String/* brokerAddr */, List<String>/* Filter Server */> filterServerTable;
 
     public RouteInfoManager() {
@@ -544,7 +549,7 @@ public class RouteInfoManager {
                                         topic, queueData);
                                 }
                             }
-
+                            // topic的队列是空的 则 topicQueueTable移除这个topic 信息
                             if (queueDataList.isEmpty()) {
                                 itTopicQueueTable.remove();
                                 log.info("remove topic[{}] all queue, from topicQueueTable, because channel destroyed",

@@ -199,6 +199,7 @@ public class IndexService {
     }
 
     public void buildIndex(DispatchRequest req) {
+        // 获取索引文件 对应一个mapperfile
         IndexFile indexFile = retryGetAndCreateIndexFile();
         if (indexFile != null) {
             long endPhyOffset = indexFile.getEndPhyOffset();
@@ -220,6 +221,7 @@ public class IndexService {
             }
 
             if (req.getUniqKey() != null) {
+                // 将 getUniqKey 放到 indexFile
                 indexFile = putKey(indexFile, msg, buildKey(topic, req.getUniqKey()));
                 if (indexFile == null) {
                     log.error("putKey error commitlog {} uniqkey {}", req.getCommitLogOffset(), req.getUniqKey());

@@ -92,21 +92,26 @@ public class ConsumeQueue {
             int index = mappedFiles.size() - 3;
             if (index < 0)
                 index = 0;
-
+            // 一个consuemqueue的文件大小
             int mappedFileSizeLogics = this.mappedFileSize;
+            // 倒数第三个或者第一个consumequeue文件
             MappedFile mappedFile = mappedFiles.get(index);
             ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
-            long processOffset = mappedFile.getFileFromOffset();
-            long mappedFileOffset = 0;
+            // 文件名尾缀值
+            long processOffset = mappedFile.getFileFromOffset(); // 1300
+            long mappedFileOffset = 0; // 最后一个文件这里才不为mappedFileSize
             long maxExtAddr = 1;
             while (true) {
                 for (int i = 0; i < mappedFileSizeLogics; i += CQ_STORE_UNIT_SIZE) {
+                    // consuemqueue的起始位置 大小和tag
                     long offset = byteBuffer.getLong();
                     int size = byteBuffer.getInt();
                     long tagsCode = byteBuffer.getLong();
 
                     if (offset >= 0 && size > 0) {
+                        // 消费队列的逻辑偏移
                         mappedFileOffset = i + CQ_STORE_UNIT_SIZE;
+                        // 消息的物理位置
                         this.maxPhysicOffset = offset + size;
                         if (isExtAddr(tagsCode)) {
                             maxExtAddr = tagsCode;
@@ -375,10 +380,11 @@ public class ConsumeQueue {
     public long getMinOffsetInQueue() {
         return this.minLogicOffset / CQ_STORE_UNIT_SIZE;
     }
-
+    // 构建核心
     public void putMessagePositionInfoWrapper(DispatchRequest request) {
         final int maxRetries = 30;
         boolean canWrite = this.defaultMessageStore.getRunningFlags().isCQWriteable();
+        //
         for (int i = 0; i < maxRetries && canWrite; i++) {
             long tagsCode = request.getTagsCode();
             if (isExtWriteEnable()) {
@@ -395,6 +401,7 @@ public class ConsumeQueue {
                         topic, queueId, request.getCommitLogOffset());
                 }
             }
+            // 核心
             boolean result = this.putMessagePositionInfo(request.getCommitLogOffset(),
                 request.getMsgSize(), tagsCode, request.getConsumeQueueOffset());
             if (result) {
@@ -422,6 +429,14 @@ public class ConsumeQueue {
         this.defaultMessageStore.getRunningFlags().makeLogicsQueueError();
     }
 
+    /**
+     *
+     * @param offset 需要重构的consumequeue的message的commitlog的物理位置
+     * @param size message大小
+     * @param tagsCode
+     * @param cqOffset 消息队列的逻辑偏移
+     * @return
+     */
     private boolean putMessagePositionInfo(final long offset, final int size, final long tagsCode,
         final long cqOffset) {
 
@@ -437,9 +452,11 @@ public class ConsumeQueue {
         this.byteBufferIndex.putLong(tagsCode);
 
         final long expectLogicOffset = cqOffset * CQ_STORE_UNIT_SIZE;
-
+        // 根据期望的绝对位置找到对应consumequeue文件的mappedfile
         MappedFile mappedFile = this.mappedFileQueue.getLastMappedFile(expectLogicOffset);
         if (mappedFile != null) {
+            // 如果mapperfile queue的mapperfile   list被清空
+            // 需要保障消息队列的逻辑位置和consumequeue文件的起始文件和偏移位置一致 需要补充逻辑消息
 
             if (mappedFile.isFirstCreateInQueue() && cqOffset != 0 && mappedFile.getWrotePosition() == 0) {
                 this.minLogicOffset = expectLogicOffset;

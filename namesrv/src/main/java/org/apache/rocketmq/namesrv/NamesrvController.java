@@ -74,24 +74,24 @@ public class NamesrvController {
     }
 
     public boolean initialize() {
-
+        // 加载kv配置
         this.kvConfigManager.load();
-
+        // 启动 netty server
         this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
-
+        // 创建线程池
         this.remotingExecutor =
             Executors.newFixedThreadPool(nettyServerConfig.getServerWorkerThreads(), new ThreadFactoryImpl("RemotingExecutorThread_"));
-
+        // 注册线程池
         this.registerProcessor();
-
+        // 创建定时线程池任务
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
-
+            // 每10秒,扫描本地缓存信息;如果心跳信息长时间没到达,剔除rocketmq信息
             @Override
             public void run() {
                 NamesrvController.this.routeInfoManager.scanNotActiveBroker();
             }
         }, 5, 10, TimeUnit.SECONDS);
-
+        //
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override

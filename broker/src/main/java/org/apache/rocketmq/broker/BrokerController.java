@@ -18,6 +18,7 @@ package org.apache.rocketmq.broker;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.MappedByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -849,6 +850,8 @@ public class BrokerController {
     }
 
     public void start() throws Exception {
+        // 启动各种组件
+
         if (this.messageStore != null) {
             this.messageStore.start();
         }
@@ -884,9 +887,11 @@ public class BrokerController {
         if (!messageStoreConfig.isEnableDLegerCommitLog()) {
             startProcessorByHa(messageStoreConfig.getBrokerRole());
             handleSlaveSynchronize(messageStoreConfig.getBrokerRole());
+            // 注册所有的broker 到name server
             this.registerBrokerAll(true, false, true);
         }
 
+        // 一般情况下: 每30秒 进行name server 注册
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -927,7 +932,7 @@ public class BrokerController {
 
         doRegisterBrokerAll(true, false, topicConfigSerializeWrapper);
     }
-
+    // 发送心跳到那么server
     public synchronized void registerBrokerAll(final boolean checkOrderConfig, boolean oneway, boolean forceRegister) {
         TopicConfigSerializeWrapper topicConfigWrapper = this.getTopicConfigManager().buildTopicConfigSerializeWrapper();
 
@@ -948,12 +953,14 @@ public class BrokerController {
             this.brokerConfig.getBrokerName(),
             this.brokerConfig.getBrokerId(),
             this.brokerConfig.getRegisterBrokerTimeoutMills())) {
+            // 真正的开始注册到那么server  进行服务发现
             doRegisterBrokerAll(checkOrderConfig, oneway, topicConfigWrapper);
         }
     }
 
     private void doRegisterBrokerAll(boolean checkOrderConfig, boolean oneway,
         TopicConfigSerializeWrapper topicConfigWrapper) {
+        // 通过netty 进行注册
         List<RegisterBrokerResult> registerBrokerResultList = this.brokerOuterAPI.registerBrokerAll(
             this.brokerConfig.getBrokerClusterName(),
             this.getBrokerAddr(),

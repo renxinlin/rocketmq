@@ -32,6 +32,8 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.config.BrokerRole;
 
 /**
+ * 分配映射文件的一个服务线程
+ * 该线程一直执行自等待在执行
  * Create MappedFile in advance
  */
 public class AllocateMappedFileService extends ServiceThread {
@@ -49,7 +51,7 @@ public class AllocateMappedFileService extends ServiceThread {
     }
 
     public MappedFile putRequestAndReturnMappedFile(String nextFilePath, String nextNextFilePath, int fileSize) {
-        int canSubmitRequests = 2;
+        int canSubmitRequests = 2;//默认可以处理两个映射文件创建请求
         if (this.messageStore.getMessageStoreConfig().isTransientStorePoolEnable()) {
             if (this.messageStore.getMessageStoreConfig().isFastFailIfNoBufferInStorePool()
                 && BrokerRole.SLAVE != this.messageStore.getMessageStoreConfig().getBrokerRole()) { //if broker is slave, don't fast fail even no buffer in pool
@@ -221,7 +223,9 @@ public class AllocateMappedFileService extends ServiceThread {
         // Full file path
         private String filePath;
         private int fileSize;
+        // 用于实现分配映射文件的等待通知线程模型 初始值为1，0表示文件创建完成
         private CountDownLatch countDownLatch = new CountDownLatch(1);
+        // 根据路径和文件大小创建的文件
         private volatile MappedFile mappedFile = null;
 
         public AllocateRequest(String filePath, int fileSize) {
