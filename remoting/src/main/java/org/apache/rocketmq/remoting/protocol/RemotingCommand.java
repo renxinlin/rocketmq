@@ -69,10 +69,24 @@ public class RemotingCommand {
         }
     }
 
+    /**
+     *  请求命令码(ReqeustCode)或响应命令码(ResponseCode)
+     */
     private int code;
     private LanguageCode language = LanguageCode.JAVA;
+    /**
+     * 请求或响应的版本号, 对应RemotingCommand.version
+     */
     private int version = 0;
+    /**
+     * 请求唯一识别码
+     * 请求发起方在同一连接上不同的请求标识代码，多线程连接复用使用.响应直接返回
+     */
     private int opaque = requestId.getAndIncrement();
+
+    /**
+     * 通信层标志, 比如标识是否为请求(偶数)还是响应(奇数),单向(2的倍数+2)还是双向
+     */
     private int flag = 0;
     private String remark;
     private HashMap<String, String> extFields;

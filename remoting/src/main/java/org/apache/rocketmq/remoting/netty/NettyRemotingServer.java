@@ -63,17 +63,29 @@ import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
+
+/**
+ * Netty Server主类. 负责Netty Server建立,监听. 同步, 异步, 单向调用, 业务处理器注册等
+ */
 public class NettyRemotingServer extends NettyRemotingAbstract implements RemotingServer {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(RemotingHelper.ROCKETMQ_REMOTING);
+    // netty 启动类
     private final ServerBootstrap serverBootstrap;
+    // 多路复用器监听线程
     private final EventLoopGroup eventLoopGroupSelector;
+    // io线程
     private final EventLoopGroup eventLoopGroupBoss;
+    //
     private final NettyServerConfig nettyServerConfig;
-
+    //
     private final ExecutorService publicExecutor;
+    /**
+     *
+     */
     private final ChannelEventListener channelEventListener;
 
     private final Timer timer = new Timer("ServerHouseKeepingService", true);
+    //
     private DefaultEventExecutorGroup defaultEventExecutorGroup;
 
 
@@ -87,6 +99,13 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
     private HandshakeHandler handshakeHandler;
     private NettyEncoder encoder;
     private NettyConnectManageHandler connectionManageHandler;
+    /**
+     * 对RemotingCommand进行业务处理.
+     * 其会委托给注册在
+     * processorTable 中RemotingCommand中code
+     * 对应的NettyRequestProcessor
+     * 在对应的线程池(ExecutorService)中进行处理
+     */
     private NettyServerHandler serverHandler;
 
     public NettyRemotingServer(final NettyServerConfig nettyServerConfig) {

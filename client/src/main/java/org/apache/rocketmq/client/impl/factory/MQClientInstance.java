@@ -96,6 +96,9 @@ public class MQClientInstance {
     private final ConcurrentMap<String/* group */, MQConsumerInner> consumerTable = new ConcurrentHashMap<String, MQConsumerInner>();
     private final ConcurrentMap<String/* group */, MQAdminExtInner> adminExtTable = new ConcurrentHashMap<String, MQAdminExtInner>();
     private final NettyClientConfig nettyClientConfig;
+    /**
+     * 与 broker与nameservrer交互
+     */
     private final MQClientAPIImpl mQClientAPIImpl;
     private final MQAdminImpl mQAdminImpl;
     private final ConcurrentMap<String/* Topic */, TopicRouteData> topicRouteTable = new ConcurrentHashMap<String, TopicRouteData>();
@@ -112,7 +115,13 @@ public class MQClientInstance {
         }
     });
     private final ClientRemotingProcessor clientRemotingProcessor;
+
     private final PullMessageService pullMessageService;
+    /**
+     *  RebalanceService会每隔20s进行轮询 其根据 获取的此topic所有messageQueue信息
+     *  以及对应此topic-consumerGroup的client数量,进行负载均衡,
+     *  来确定当前client(consumer)应该消费的messageQueue队列情况
+     */
     private final RebalanceService rebalanceService;
     private final DefaultMQProducer defaultMQProducer;
     private final ConsumerStatsManager consumerStatsManager;
@@ -231,17 +240,20 @@ public class MQClientInstance {
                     this.serviceState = ServiceState.START_FAILED;
                     // If not specified,looking address from name server
                     if (null == this.clientConfig.getNamesrvAddr()) {
+                        // 获取nameserver 另外client也会定时刷新
                         this.mQClientAPIImpl.fetchNameServerAddr();
                     }
                     // Start request-response channel
+                    // 启动netty 通信
                     this.mQClientAPIImpl.start();
                     // Start various schedule tasks
+                    // 启动所有的定时任务
                     this.startScheduledTask();
-                    // Start pull service
+                    // Start pull service 消费者 推拉的本质都是拉消息  开启拉取消息线程
                     this.pullMessageService.start();
-                    // Start rebalance service
+                    // Start rebalance service 消费者负载均衡
                     this.rebalanceService.start();
-                    // Start push service
+                    // Start push service 循环递归
                     this.defaultMQProducer.getDefaultMQProducerImpl().start(false);
                     log.info("the client factory [{}] start OK", this.clientId);
                     this.serviceState = ServiceState.RUNNING;
@@ -255,6 +267,7 @@ public class MQClientInstance {
     }
 
     private void startScheduledTask() {
+        // 获取nameserver
         if (null == this.clientConfig.getNamesrvAddr()) {
             this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
@@ -273,6 +286,7 @@ public class MQClientInstance {
 
             @Override
             public void run() {
+                // 更新路由信息
                 try {
                     MQClientInstance.this.updateTopicRouteInfoFromNameServer();
                 } catch (Exception e) {
@@ -285,6 +299,7 @@ public class MQClientInstance {
 
             @Override
             public void run() {
+                // 清除挂掉的broker
                 try {
                     MQClientInstance.this.cleanOfflineBroker();
                     MQClientInstance.this.sendHeartbeatToAllBrokerWithLock();
@@ -298,6 +313,11 @@ public class MQClientInstance {
 
             @Override
             public void run() {
+                /**
+                 * 消费者 持久化消费进度
+                 * 广播 消费端
+                 * 集群 broker端
+                 */
                 try {
                     MQClientInstance.this.persistAllConsumerOffset();
                 } catch (Exception e) {
@@ -311,6 +331,7 @@ public class MQClientInstance {
             @Override
             public void run() {
                 try {
+                    // 自动调整线程池
                     MQClientInstance.this.adjustThreadPool();
                 } catch (Exception e) {
                     log.error("ScheduledTask adjustThreadPool exception", e);
@@ -466,6 +487,9 @@ public class MQClientInstance {
         }
     }
 
+    /**
+     * 建立和所有master broker的连接, 并在broker上注册其连接通道
+     */
     public void sendHeartbeatToAllBrokerWithLock() {
         if (this.lockHeartbeat.tryLock()) {
             try {
@@ -604,12 +628,21 @@ public class MQClientInstance {
         }
     }
 
+    /**
+     * NameServer 的长连接 Channel 发送 GET_ROUTEINTO_BY_TOPIC
+     *  @param topic
+     * @param isDefault
+     * @param defaultMQProducer
+     * @return
+     */
     public boolean updateTopicRouteInfoFromNameServer(final String topic, boolean isDefault,
         DefaultMQProducer defaultMQProducer) {
         try {
             if (this.lockNamesrv.tryLock(LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                 try {
                     TopicRouteData topicRouteData;
+
+                    // 自动创建主题 isDefault = true
                     if (isDefault && defaultMQProducer != null) {
                         topicRouteData = this.mQClientAPIImpl.getDefaultTopicRouteInfoFromNameServer(defaultMQProducer.getCreateTopicKey(),
                             1000 * 3);

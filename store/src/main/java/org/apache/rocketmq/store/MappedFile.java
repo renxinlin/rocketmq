@@ -56,6 +56,8 @@ public class MappedFile extends ReferenceResource {
     protected FileChannel fileChannel;
     /**
      * Message will put to here first, and then reput to FileChannel if writeBuffer is not null.
+     *
+     * 堆外内存
      */
     protected ByteBuffer writeBuffer = null;
     protected TransientStorePool transientStorePool = null;

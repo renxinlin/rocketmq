@@ -33,20 +33,30 @@ public class MessageStoreConfig {
     // CommitLog file size,default is 1G
     private int mappedFileSizeCommitLog = 1024 * 1024 * 1024;
     // ConsumeQueue file size,default is 30W
+    // 30万* 20  【 8 偏移量、 4 size、8 tagscode）】
     private int mappedFileSizeConsumeQueue = 300000 * ConsumeQueue.CQ_STORE_UNIT_SIZE;
     // enable consume queue ext
+    // 是否开启 consumeQueueExt,默认为 false,就是如果消费端消息消费速度跟不上，是否创建一个扩展的 ConsumeQueue文件，
+    // 如果不开启，应该会阻塞从 commitlog 文件中获取消息，并且 ConsumeQueue,应该是按topic独立的
     private boolean enableConsumeQueueExt = false;
-    // ConsumeQueue extend file size, 48M
+    // ConsumeQueue extend file size, 48M 扩展consume文件的大小，默认为48M。
     private int mappedFileSizeConsumeQueueExt = 48 * 1024 * 1024;
     // Bit count of filter bit map.
     // this will be set by pipe of calculate filter bit map.
     private int bitMapLengthConsumeQueueExt = 64;
 
+    /**
+     * 刷写 CommitLog 的间隔时间，RocketMQ 后台会启动一个线程，将消息刷写到磁盘
+     * flush 操作，调用文件通道的force()方法
+     */
     // CommitLog flush interval
     // flush data to disk
     @ImportantField
     private int flushIntervalCommitLog = 500;
 
+    /**
+     *  提交消息到 CommitLog 对应的文件通道的间隔时间 将消息写入到文件通道（调用FileChannel.write方法）得到最新的写指针，默认为200毫秒。
+     */
     // Only used if TransientStorePool enabled
     // flush data to FileChannel
     @ImportantField

@@ -42,9 +42,19 @@ import org.apache.rocketmq.srvutil.ShutdownHookThread;
 import org.slf4j.LoggerFactory;
 
 /**
+ * Namesrv在RocketMQ中的作用相较于zk在Kafka中的地位大幅降低, 其并不做master broker挂掉后的选举操作,
+ * 而仅仅用于对broker的管理(包括主从broker)以及mqadmin工具的命令操作
+ *
  * nameserver
+ *
+ *
+ *
+ *
+ * 启动时配置加载顺序:
+ *      -p kv值
+ *      -c 文件
  */
-public class NamesrvStartup {
+public class NamesrvStartup {// Namesrv  启动类
 
     private static InternalLogger log;
     private static Properties properties = null;
@@ -72,6 +82,13 @@ public class NamesrvStartup {
         return null;
     }
 
+    /**
+     * $ nohup sh mqbroker -n 192.168.1.1:9876 -c $ROCKETMQ_HOME/conf/2m-noslave/broker-b.properties &
+     * @param args
+     * @return
+     * @throws IOException
+     * @throws JoranException
+     */
     public static NamesrvController createNamesrvController(String[] args) throws IOException, JoranException {
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
         //PackageConflictDetect.detectFastjson();
@@ -112,7 +129,7 @@ public class NamesrvStartup {
 
         // 通过控制台指定属性配置文件位置
         MixAll.properties2Object(ServerUtil.commandLine2Properties(commandLine), namesrvConfig);
-
+        // 确保环境变量 ROCKETMQ_HOME存在
         if (null == namesrvConfig.getRocketmqHome()) {
             System.out.printf("Please set the %s variable in your environment to match the location of the RocketMQ installation%n", MixAll.ROCKETMQ_HOME_ENV);
             System.exit(-2);
@@ -122,6 +139,7 @@ public class NamesrvStartup {
         JoranConfigurator configurator = new JoranConfigurator();
         configurator.setContext(lc);
         lc.reset();
+        // 加载日志配置
         configurator.doConfigure(namesrvConfig.getRocketmqHome() + "/conf/logback_namesrv.xml");
 
         log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);

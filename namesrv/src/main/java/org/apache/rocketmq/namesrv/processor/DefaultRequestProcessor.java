@@ -61,7 +61,7 @@ import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 /**
  *
  *
- *
+ * namesrv的请求处理类
  *
  * 服务注册
  *

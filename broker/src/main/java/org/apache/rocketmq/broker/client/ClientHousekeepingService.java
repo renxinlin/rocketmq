@@ -26,7 +26,15 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.remoting.ChannelEventListener;
-
+// zookeeper Apollo
+// http|tcp  netty tomcat spring mybatis mvc sentinel|skywalking|prometheus|报警|日志   redis|mq|db canal| otter
+// 事务 分库分表
+// 数据结构  算法 raft
+// k8s
+// javase
+/**
+ *   对client(producer, consumer, filter server)连接的定时检测
+ */
 public class ClientHousekeepingService implements ChannelEventListener {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private final BrokerController brokerController;

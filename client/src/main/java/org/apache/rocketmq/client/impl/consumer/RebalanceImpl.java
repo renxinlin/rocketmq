@@ -325,6 +325,14 @@ public abstract class RebalanceImpl {
         }
     }
 
+    /**
+     * 根据其中的broker信息到broker查询此topic-consumerGroup-queueId当前的消费位置,
+     * 组装PullRequest对象, 并将此对象发送给PullMessageService的pullRequestQueue队列
+     * @param topic
+     * @param mqSet
+     * @param isOrder
+     * @return
+     */
     private boolean updateProcessQueueTableInRebalance(final String topic, final Set<MessageQueue> mqSet,
         final boolean isOrder) {
         boolean changed = false;

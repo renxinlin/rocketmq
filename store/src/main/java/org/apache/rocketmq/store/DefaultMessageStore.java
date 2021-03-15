@@ -62,6 +62,9 @@ import org.apache.rocketmq.store.index.QueryOffsetResult;
 import org.apache.rocketmq.store.schedule.ScheduleMessageService;
 import org.apache.rocketmq.store.stats.BrokerStatsManager;
 
+/**
+ * 息存储器. 管理着commitLog, consumeQueue, index等如何进行数据的存储. 包括一些重要的处理器:
+ */
 public class DefaultMessageStore implements MessageStore {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
@@ -70,16 +73,20 @@ public class DefaultMessageStore implements MessageStore {
     private final CommitLog commitLog;
 
     private final ConcurrentMap<String/* topic */, ConcurrentMap<Integer/* queueId */, ConsumeQueue>> consumeQueueTable;
-
+    /**
+     * consumeQueue刷盘服务,
+     */
     private final FlushConsumeQueueService flushConsumeQueueService;
-
+    /**
+     * comitLog清理服务,
+     */
     private final CleanCommitLogService cleanCommitLogService;
     /**
-     *
+     * consumeQueue清理服务
      */
     private final CleanConsumeQueueService cleanConsumeQueueService;
     /**
-     * 索引文件
+     * 消息中key的索引服务
      */
     private final IndexService indexService;
 
@@ -90,7 +97,9 @@ public class DefaultMessageStore implements MessageStore {
     private final ReputMessageService reputMessageService;
 
     private final HAService haService;
-
+    /**
+     * 定时消息服务, 用于producer定时消息发送,会将定时消息转换为真实消息进行存储, 落盘和consumeQueue记录构建
+     */
     private final ScheduleMessageService scheduleMessageService;
 
     private final StoreStatsService storeStatsService;

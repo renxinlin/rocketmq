@@ -16,6 +16,10 @@
  */
 package org.apache.rocketmq.remoting.netty;
 
+/**
+ * 各组件需要的通信组件 对应的配置类
+ *
+ */
 public class NettyServerConfig implements Cloneable {
     private int listenPort = 8888;
     private int serverWorkerThreads = 8;
