@@ -566,14 +566,16 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                             //Reset topic with namespace during resend.
                             msg.setTopic(this.defaultMQProducer.withNamespace(msg.getTopic()));
                         }
+                        // 失败重试发送前减去第一次发送的时间
                         long costTime = beginTimestampPrev - beginTimestampFirst;
                         if (timeout < costTime) {
                             callTimeout = true;
                             break;
                         }
-                        // steo 发送消息
+                        // steo 4 发送消息
                         sendResult = this.sendKernelImpl(msg, mq, communicationMode, sendCallback, topicPublishInfo, timeout - costTime);
                         endTimestamp = System.currentTimeMillis();
+                        // step 5 处理 sendLatencyFaultEnable对应的功能 发送失败 isolation为true代表被隔离
                         this.updateFaultItem(mq.getBrokerName(), endTimestamp - beginTimestampPrev, false);
                         switch (communicationMode) {
                             case ASYNC:
@@ -687,18 +689,23 @@ public class DefaultMQProducerImpl implements MQProducerInner {
      * @return
      */
     private TopicPublishInfo tryToFindTopicPublishInfo(final String topic) {
+        // step 0 本地缓存获取
         TopicPublishInfo topicPublishInfo = this.topicPublishInfoTable.get(topic);
         if (null == topicPublishInfo || !topicPublishInfo.ok()) {
             this.topicPublishInfoTable.putIfAbsent(topic, new TopicPublishInfo());
-            // 第一次不会自动创建
+            //  step 1 尝试从 NameServer 获取配置信息并更新本地缓存配置 第一次不会自动创建
             this.mQClientFactory.updateTopicRouteInfoFromNameServer(topic);
             topicPublishInfo = this.topicPublishInfoTable.get(topic);
         }
 
+
+        // steo2 : step1如果找到可用的路由信息并返回
         if (topicPublishInfo.isHaveTopicRouterInfo() || topicPublishInfo.ok()) {
             return topicPublishInfo;
         } else {
-            // 从nameServer的broker路由信息 // 第二次不会自动创建topic   尝试使用默认的 topic 去找路由配置信息
+            // 一般推荐线上关闭  因为broker创建topic后 会发送给nameserver 覆盖路由信息 造成负载不均衡
+            // 从nameServer的broker路由信息  第二次不会自动创建topic   尝试使用默认的 topic 【TBW102】去找路由配置信息
+            //
             this.mQClientFactory.updateTopicRouteInfoFromNameServer(topic, true, this.defaultMQProducer);
             topicPublishInfo = this.topicPublishInfoTable.get(topic);
             return topicPublishInfo;
