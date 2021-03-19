@@ -29,7 +29,9 @@ public class MessageStoreConfig {
     @ImportantField
     private String storePathCommitLog = System.getProperty("user.home") + File.separator + "store"
         + File.separator + "commitlog";
-
+    /**
+     * 单个commitlog文件的大小
+     */
     // CommitLog file size,default is 1G
     private int mappedFileSizeCommitLog = 1024 * 1024 * 1024;
     // ConsumeQueue file size,default is 30W
@@ -157,6 +159,10 @@ public class MessageStoreConfig {
     private String dLegerGroup;
     private String dLegerPeers;
     private String dLegerSelfId;
+
+
+
+
 
     public boolean isDebugLockEnable() {
         return debugLockEnable;

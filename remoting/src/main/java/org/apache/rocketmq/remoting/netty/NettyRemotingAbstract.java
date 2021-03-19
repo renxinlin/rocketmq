@@ -76,6 +76,11 @@ public abstract class NettyRemotingAbstract {
         new ConcurrentHashMap<Integer, ResponseFuture>(256);
 
     /**
+     *
+     * org.apache.rocketmq.common.protocol.RequestCode
+     * org.apache.rocketmq.common.protocol.ResponseCode
+     *
+     *
      * This container holds all processors per request code, aka, for each incoming request, we may look up the
      * responding processor in this map to handle the request.
      */

@@ -32,18 +32,41 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.config.BrokerRole;
 
 /**
- * 分配映射文件的一个服务线程
- * 该线程一直执行自等待在执行
+ *
+ * 任新林: mappedfile是底层文件  对上支持commitlog   consumequeue文件
+ *
+ *
+ * rocketmq mq创建mappedFile 会把下一个mappedFile也给创建
+ *
+ *
+ * 其中putRequestAndReturnMappedFile 用于追加任务到requestQueue
+ * mmapOperation用于创建文件
+ *
+ * 该线程一直执行自等待在执行 这也是AllocateRequest 实现[比较]接口的原因  小的同步创建  大的异步创建
  * Create MappedFile in advance
  */
 public class AllocateMappedFileService extends ServiceThread {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
+    /**
+     * 创建文件超时时间
+     */
     private static int waitTimeOut = 1000 * 5;
+    /**
+     * 保存当前待处理的分配请求 请求成功处理则移除
+     * key为filepath 根据filepath获取结果
+     */
     private ConcurrentMap<String, AllocateRequest> requestTable =
         new ConcurrentHashMap<String, AllocateRequest>();
+    /**
+     * 优先级队列 根据请求的优先级创建commitlog文件
+     * 说白了就是按照文件名大小顺序创建文件（1g,1+1g,1+1+1g）
+     * */
     private PriorityBlockingQueue<AllocateRequest> requestQueue =
         new PriorityBlockingQueue<AllocateRequest>();
+
+
     private volatile boolean hasException = false;
+
     private DefaultMessageStore messageStore;
 
     public AllocateMappedFileService(DefaultMessageStore messageStore) {
@@ -99,6 +122,7 @@ public class AllocateMappedFileService extends ServiceThread {
         AllocateRequest result = this.requestTable.get(nextFilePath);
         try {
             if (result != null) {
+                // 通过
                 boolean waitOK = result.getCountDownLatch().await(waitTimeOut, TimeUnit.MILLISECONDS);
                 if (!waitOK) {
                     log.warn("create mmap timeout " + result.getFilePath() + " " + result.getFileSize());
@@ -142,6 +166,9 @@ public class AllocateMappedFileService extends ServiceThread {
         log.info(this.getServiceName() + " service end");
     }
 
+    /**
+     * 创建mmap文件
+     */
     /**
      * Only interrupted by the external thread, will return false
      */
@@ -190,6 +217,7 @@ public class AllocateMappedFileService extends ServiceThread {
                     .getMappedFileSizeCommitLog()
                     &&
                     this.messageStore.getMessageStoreConfig().isWarmMapedFileEnable()) {
+                    // 写入假值0 进行预热 写入假值进入发生缺页 从而读取物理磁盘数据到内存
                     mappedFile.warmMappedFile(this.messageStore.getMessageStoreConfig().getFlushDiskType(),
                         this.messageStore.getMessageStoreConfig().getFlushLeastPagesWhenWarmMapedFile());
                 }
@@ -219,13 +247,18 @@ public class AllocateMappedFileService extends ServiceThread {
         return true;
     }
 
+    /**
+     * 内部类  实现Comparable用于自定义分配请求在优先级队列的优先级
+     *
+     */
     static class AllocateRequest implements Comparable<AllocateRequest> {
-        // Full file path
+        // Full file path   commitlog文件路径
         private String filePath;
+        // 1g大小
         private int fileSize;
-        // 用于实现分配映射文件的等待通知线程模型 初始值为1，0表示文件创建完成
+        // 用于实现分配映射文件的等待通知线程模型 初始值为1，0表示文件创建完成    参见AllocateMappedFileService类注释  小的通过闭锁等待创建完成
         private CountDownLatch countDownLatch = new CountDownLatch(1);
-        // 根据路径和文件大小创建的文件
+        // 根据路径和文件大小创建的文件  mmapOperation操作后存在
         private volatile MappedFile mappedFile = null;
 
         public AllocateRequest(String filePath, int fileSize) {

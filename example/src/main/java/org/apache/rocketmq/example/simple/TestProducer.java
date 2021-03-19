@@ -45,6 +45,7 @@ public class TestProducer {
                         "TagA", // 过滤
                         "key113", // 索引
                         "Hello world".getBytes(RemotingHelper.DEFAULT_CHARSET));
+                msg.setWaitStoreMsgOK(true);
                 SendResult sendResult = producer.send(msg);
                 System.out.printf("%s%n", sendResult);
 

@@ -24,11 +24,23 @@ import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.rocketmq.client.common.ThreadLocalIndex;
 
+/**
+ * 消息失败延迟规避机制 元数据存储区
+ */
 public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> {
-    private final ConcurrentHashMap<String, FaultItem> faultItemTable = new ConcurrentHashMap<String, FaultItem>(16);
+
+    private final ConcurrentHashMap<String /* broker name */, FaultItem> faultItemTable = new ConcurrentHashMap<String, FaultItem>(16);
 
     private final ThreadLocalIndex whichItemWorst = new ThreadLocalIndex();
 
+    /**
+     *
+     *
+     *
+     * @param name
+     * @param currentLatency
+     * @param notAvailableDuration
+     */
     @Override
     public void updateFaultItem(final String name, final long currentLatency, final long notAvailableDuration) {
         FaultItem old = this.faultItemTable.get(name);
@@ -98,7 +110,14 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
 
     class FaultItem implements Comparable<FaultItem> {
         private final String name;
+        /**
+         * 消息发送延时
+         */
         private volatile long currentLatency;
+
+        /**
+         * 表示在这个时间戳之前不可用对应的broker 在这个时间戳之后的才可以用
+         */
         private volatile long startTimestamp;
 
         public FaultItem(final String name) {
@@ -131,6 +150,7 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
         }
 
         public boolean isAvailable() {
+            // startTimestamp = 发送失败的时间点+F(currentLatency-> notAvailableDuration）
             return (System.currentTimeMillis() - startTimestamp) >= 0;
         }
 

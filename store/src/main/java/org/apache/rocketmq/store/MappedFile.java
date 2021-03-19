@@ -202,21 +202,26 @@ public class MappedFile extends ReferenceResource {
     public AppendMessageResult appendMessagesInner(final MessageExt messageExt, final AppendMessageCallback cb) {
         assert messageExt != null;
         assert cb != null;
-
+        // 获取当前文件写入位置
         int currentPos = this.wrotePosition.get();
 
         if (currentPos < this.fileSize) {
+            // buffer和同步刷盘还是异步刷盘机制相关 broker.conf配置
             ByteBuffer byteBuffer = writeBuffer != null ? writeBuffer.slice() : this.mappedByteBuffer.slice();
             byteBuffer.position(currentPos);
             AppendMessageResult result;
+            // 单独消息
             if (messageExt instanceof MessageExtBrokerInner) {
                 result = cb.doAppend(this.getFileFromOffset(), byteBuffer, this.fileSize - currentPos, (MessageExtBrokerInner) messageExt);
             } else if (messageExt instanceof MessageExtBatch) {
+                // 批量消息
                 result = cb.doAppend(this.getFileFromOffset(), byteBuffer, this.fileSize - currentPos, (MessageExtBatch) messageExt);
             } else {
                 return new AppendMessageResult(AppendMessageStatus.UNKNOWN_ERROR);
             }
+            // 处理写完后的指针
             this.wrotePosition.addAndGet(result.getWroteBytes());
+            // 处理写入mmap的时间点
             this.storeTimestamp = result.getStoreTimestamp();
             return result;
         }
@@ -346,7 +351,7 @@ public class MappedFile extends ReferenceResource {
         if (this.isFull()) {
             return true;
         }
-
+        // 积累到一定的操作系统内存页才开始刷盘
         if (flushLeastPages > 0) {
             return ((write / OS_PAGE_SIZE) - (flush / OS_PAGE_SIZE)) >= flushLeastPages;
         }
@@ -485,18 +490,35 @@ public class MappedFile extends ReferenceResource {
         this.committedPosition.set(pos);
     }
 
+    public static void main(String[] args) throws IOException {
+        RandomAccessFile randomAccessFile = new RandomAccessFile(new File("/Users/mac/renxl1.txt"), "rw");
+        MappedByteBuffer map = randomAccessFile.getChannel().map(MapMode.READ_WRITE, 0, 1024);
+        byte[] bytes = new byte[1024];
+        bytes[1]=2;
+        map.get(bytes,0,1024);
+        System.out.println();
+
+    }
     public void warmMappedFile(FlushDiskType type, int pages) {
         long beginTime = System.currentTimeMillis();
         ByteBuffer byteBuffer = this.mappedByteBuffer.slice();
         int flush = 0;
         long time = System.currentTimeMillis();
+        // 对1G的commitlog进行预热 写入假值，适当让出cpu 然后mlock放置swap
         for (int i = 0, j = 0; i < this.fileSize; i += MappedFile.OS_PAGE_SIZE, j++) {
             // 仅分配内存并调用 mlock 并不会为调用进程锁定这些内存，因为对应的分页可能是写时复制（copy-on-write）的5。因此，你应该在每个页面中写入一个假的值
             // 也就是说仅仅分配，但内存映射尚未执行
 
             /**
              * Copy-on-write
+             * 为什么是0不是1 或者其他值
+             * renxl: 我个人的理解 不管是0，1或者其他值，都可以达到内存映射 物理内存分配 防止缺页
+             * 但是0相对来说不会改变其原有的值,合理性更好
+             * 建立了进程虚拟地址空间，并没有分配虚拟内存对应的物理内存
              *
+             *
+             * 使用mmap()内存分配时，只是建立了进程虚拟地址空间，并没有分配虚拟内存对应的物理内存。当进程访问这些没有建立映射关系的虚拟内存时，处理器自动触发一个缺页异常，进而进入内核空间分配物理内存、更新进程缓存表，最后返回用户空间，回复进程运行
+             * https://blog.csdn.net/gaoliang1719/article/details/106566872
              */
             byteBuffer.put(i, (byte) 0);
             // force flush when flush disk type is sync
@@ -507,7 +529,7 @@ public class MappedFile extends ReferenceResource {
                 }
             }
 
-            // prevent gc
+            // prevent gc 主动放弃cpu
             if (j % 1000 == 0) {
                 log.info("j={}, costTime={}", j, System.currentTimeMillis() - time);
                 time = System.currentTimeMillis();

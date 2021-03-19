@@ -29,7 +29,7 @@ public class MQFaultStrategy {
 
     private boolean sendLatencyFaultEnable = false;
     // 最大延迟时间数值，在消息发送之前，先记录当前时间（start）
-    // 50ms 100ms 550ms  1s  2s  3s 15s
+    // 50ms 100ms |  550ms  1s  2s  3s 15s
     private long[] latencyMax = {50L, 100L, 550L, 1000L, 2000L, 3000L, 15000L};
 
     // 0s 30s 60s 2min 3min 10min
@@ -69,14 +69,17 @@ public class MQFaultStrategy {
                     int pos = Math.abs(index++) % tpInfo.getMessageQueueList().size();
                     if (pos < 0)
                         pos = 0;
+                    // step1 : 自增取模
                     MessageQueue mq = tpInfo.getMessageQueueList().get(pos);
-                    // 存储了所有发送消息失败过的broker 和queue
+
+
+                    // step2 判断可用性（存储了所有发送消息失败过的broker 和queue）
                     if (latencyFaultTolerance.isAvailable(mq.getBrokerName())) {
                         if (null == lastBrokerName || mq.getBrokerName().equals(lastBrokerName))
                             return mq;
                     }
                 }
-                // 找不到只能硬着头皮找一个不是最好的
+                // step3 for循环找不到则 shuffle取得 |  找不到只能硬着头皮找一个不是最好的
                 final String notBestBroker = latencyFaultTolerance.pickOneAtLeast();
                 int writeQueueNums = tpInfo.getQueueIdByBroker(notBestBroker);
                 if (writeQueueNums > 0) {
@@ -107,6 +110,7 @@ public class MQFaultStrategy {
      */
     public void updateFaultItem(final String brokerName, final long currentLatency, boolean isolation) {
         if (this.sendLatencyFaultEnable) {
+            // 默认是30秒  否则根据发送消息延时换取对应的延迟
             long duration = computeNotAvailableDuration(isolation ? 30000 : currentLatency);
             this.latencyFaultTolerance.updateFaultItem(brokerName, currentLatency, duration);
         }

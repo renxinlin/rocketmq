@@ -144,6 +144,11 @@ public class MappedFileQueue {
         }
     }
 
+    /**
+     *
+     * broker启动的时候加载自身的commit-log
+     * @return
+     */
     public boolean load() {
         File dir = new File(this.storePath);
         File[] files = dir.listFiles();
@@ -234,6 +239,10 @@ public class MappedFileQueue {
     }
 
     public MappedFile getLastMappedFile(final long startOffset) {
+        /**
+         * 创建mappedfile
+         * allocateMappedFileService.putRequestAndReturnMappedFile
+         */
         return getLastMappedFile(startOffset, true);
     }
 

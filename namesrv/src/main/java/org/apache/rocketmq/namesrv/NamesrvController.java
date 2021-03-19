@@ -75,6 +75,10 @@ public class NamesrvController {
         this.configuration.setStorePathFromConfig(this.namesrvConfig, "configStorePath");
     }
 
+    /**
+     * 创建一个线程容量为 serverWorkerThreads 的固定长度的线程池，该线程池供 DefaultRequestProcessor 类使用，实现具体的默认的请求命令处理
+     * @return
+     */
     public boolean initialize() {
         // 加载kv配置
         this.kvConfigManager.load();

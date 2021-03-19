@@ -67,14 +67,19 @@ import org.apache.rocketmq.store.stats.BrokerStatsManager;
  */
 public class DefaultMessageStore implements MessageStore {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
-
+    /**
+     * 存储相关的配置，例如存储路径、commitLog文件大小，刷盘频次等等
+     */
     private final MessageStoreConfig messageStoreConfig;
     // CommitLog
     private final CommitLog commitLog;
 
+    /**
+     * 每个topic在当前broker的queueid信息
+     */
     private final ConcurrentMap<String/* topic */, ConcurrentMap<Integer/* queueId */, ConsumeQueue>> consumeQueueTable;
     /**
-     * consumeQueue刷盘服务,
+     * consumeQueue刷盘服务, 可能是同步也可能是异步 TODO【确认异步】
      */
     private final FlushConsumeQueueService flushConsumeQueueService;
     /**
@@ -83,27 +88,40 @@ public class DefaultMessageStore implements MessageStore {
     private final CleanCommitLogService cleanCommitLogService;
     /**
      * consumeQueue清理服务
+     * consumeQueue 过期文件删除线程
      */
     private final CleanConsumeQueueService cleanConsumeQueueService;
     /**
      * 消息中key的索引服务
+     * 索引服务   索引文件本身是一个数组+链表的数据结构
      */
     private final IndexService indexService;
 
+    /**
+     * commitlog 内存映射文件创建工具
+     * RocketMQ 使用内存映射处理 commitlog、consumeQueue文件
+     */
     private final AllocateMappedFileService allocateMappedFileService;
+
     /**
      * 根据commitlog 异步 1毫秒一次  进行consumequeue和index文件的追加
      */
     private final ReputMessageService reputMessageService;
-
+    /**
+     * 主从同步实现服务
+     */
     private final HAService haService;
     /**
      * 定时消息服务, 用于producer定时消息发送,会将定时消息转换为真实消息进行存储, 落盘和consumeQueue记录构建
      */
     private final ScheduleMessageService scheduleMessageService;
-
+    /**
+     * 存储统计服务
+     */
     private final StoreStatsService storeStatsService;
-
+    /**
+     * ByteBuffer池 默认会创建5[配置文件]个池
+     */
     private final TransientStorePool transientStorePool;
 
     private final RunningFlags runningFlags = new RunningFlags();
@@ -111,17 +129,30 @@ public class DefaultMessageStore implements MessageStore {
 
     private final ScheduledExecutorService scheduledExecutorService =
         Executors.newSingleThreadScheduledExecutor(new ThreadFactoryImpl("StoreScheduledThread"));
+    /**
+     * brokerStatsManager
+     */
     private final BrokerStatsManager brokerStatsManager;
+    /**
+     * 消息达到监听器。
+     */
     private final MessageArrivingListener messageArrivingListener;
+
     private final BrokerConfig brokerConfig;
 
     private volatile boolean shutdown = true;
-
+    /**
+     * 刷盘检测点
+     */
     private StoreCheckpoint storeCheckpoint;
 
     private AtomicLong printTimes = new AtomicLong(0);
 
+    /**
+     * 转发comitlog日志到consumeQueue、index 文件的处理器
+     */
     private final LinkedList<CommitLogDispatcher> dispatcherList;
+
 
     private RandomAccessFile lockFile;
 
@@ -458,6 +489,7 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     public CompletableFuture<PutMessageResult> asyncPutMessages(MessageExtBatch messageExtBatch) {
+        // 检查消息 broker是否主节点  系统是否繁忙等等
         PutMessageStatus checkStoreStatus = this.checkStoreStatus();
         if (checkStoreStatus != PutMessageStatus.PUT_OK) {
             return CompletableFuture.completedFuture(new PutMessageResult(checkStoreStatus, null));
@@ -1995,7 +2027,10 @@ public class DefaultMessageStore implements MessageStore {
         @Override
         public void run() {
             DefaultMessageStore.log.info(this.getServiceName() + " service started");
-
+            //                     index
+            // 写完commitlog后--->
+            //                      consumequeue
+            //
             while (!this.isStopped()) {
                 try {
                     Thread.sleep(1);

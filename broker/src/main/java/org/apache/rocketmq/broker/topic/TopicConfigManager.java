@@ -167,18 +167,20 @@ public class TopicConfigManager extends ConfigManager {
         try {
             if (this.lockTopicConfigTable.tryLock(LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                 try {
+
                     topicConfig = this.topicConfigTable.get(topic);
                     if (topicConfig != null)
                         return topicConfig;
-
+                    // 如果没有创建topic 也就是采用的是默认【TWB102】主题
                     TopicConfig defaultTopicConfig = this.topicConfigTable.get(defaultTopic);
                     if (defaultTopicConfig != null) {
+                        // 并且打开了自动创建topic
                         if (defaultTopic.equals(MixAll.AUTO_CREATE_TOPIC_KEY_TOPIC)) {
                             if (!this.brokerController.getBrokerConfig().isAutoCreateTopicEnable()) {
                                 defaultTopicConfig.setPerm(PermName.PERM_READ | PermName.PERM_WRITE);
                             }
                         }
-
+                        //
                         if (PermName.isInherited(defaultTopicConfig.getPerm())) {
                             topicConfig = new TopicConfig(topic);
 
@@ -205,7 +207,6 @@ public class TopicConfigManager extends ConfigManager {
                         log.warn("Create new topic failed, because the default topic[{}] not exist. producer:[{}]",
                             defaultTopic, remoteAddress);
                     }
-
                     if (topicConfig != null) {
                         log.info("Create new topic by default topic:[{}] config:[{}] producer:[{}]",
                             defaultTopic, topicConfig, remoteAddress);
@@ -215,7 +216,7 @@ public class TopicConfigManager extends ConfigManager {
                         this.dataVersion.nextVersion();
 
                         createNew = true;
-
+                        // 本地持久化
                         this.persist();
                     }
                 } finally {
@@ -227,6 +228,7 @@ public class TopicConfigManager extends ConfigManager {
         }
 
         if (createNew) {
+            // 向nameserver 注册topic 信息 同步topic信息给slave
             this.brokerController.registerBrokerAll(false, true, true);
         }
 
