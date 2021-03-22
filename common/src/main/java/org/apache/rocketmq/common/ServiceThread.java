@@ -120,13 +120,24 @@ public abstract class ServiceThread implements Runnable {
         log.info("makestop thread " + this.getServiceName());
     }
 
+    /**
+     * wakeup和waitForRunning控制线程唤醒或者阻塞
+     */
     public void wakeup() {
+        /**
+         * 如果已经被唤醒则不进行处理
+         * 反之设置成true
+         * 唤醒线程
+         */
         if (hasNotified.compareAndSet(false, true)) {
             waitPoint.countDown(); // notify
         }
     }
 
     protected void waitForRunning(long interval) {
+        /**
+         * 如果已经通知被唤醒则直接返回不阻塞
+         */
         if (hasNotified.compareAndSet(true, false)) {
             this.onWaitEnd();
             return;
@@ -134,7 +145,7 @@ public abstract class ServiceThread implements Runnable {
 
         //entry to wait
         waitPoint.reset();
-
+        // 如果hasNotified是false  则阻塞 10毫秒
         try {
             waitPoint.await(interval, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
@@ -145,6 +156,9 @@ public abstract class ServiceThread implements Runnable {
         }
     }
 
+    /**
+     * 钩子函数 阻塞结束线程被唤醒执行
+     */
     protected void onWaitEnd() {
     }
 

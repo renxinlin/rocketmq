@@ -23,17 +23,19 @@ public class AppendMessageResult {
     // Return code
     private AppendMessageStatus status;
     // Where to start writing
+    // 已写入起始偏移量
     private long wroteOffset;
-    // Write Bytes
+    // Write Bytes 写入字节总长度
     private int wroteBytes;
-    // Message ID
+    // Message ID broker端的消息id 可以不通过indexservice 直接定位commitlog文件
     private String msgId;
     // Message storage timestamp
     private long storeTimestamp;
-    // Consume queue's offset(step by one)
+    // Consume queue's offset(step by one) 逻辑的consumeque 偏移量
     private long logicsOffset;
+    // 写入到 MappedByteBuffer (将消息内容写入到内存映射文件中的时长)
     private long pagecacheRT = 0;
-
+    // 默认都是消息是一条条写入
     private int msgNum = 1;
 
     public AppendMessageResult(AppendMessageStatus status) {
