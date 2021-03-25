@@ -237,7 +237,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
             messageFilter = new ExpressionMessageFilter(subscriptionData, consumerFilterData,
                 this.brokerController.getConsumerFilterManager());
         }
-
+        // 拉取消息
         final GetMessageResult getMessageResult =
             this.brokerController.getMessageStore().getMessage(requestHeader.getConsumerGroup(), requestHeader.getTopic(),
                 requestHeader.getQueueId(), requestHeader.getQueueOffset(), requestHeader.getMaxMsgNums(), messageFilter);
@@ -347,6 +347,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                         context.setCommercialOwner(owner);
 
                         break;
+                        // 没有找到消息
                     case ResponseCode.PULL_NOT_FOUND:
                         if (!brokerAllowSuspend) {
 
@@ -409,7 +410,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                     }
                     break;
                 case ResponseCode.PULL_NOT_FOUND:
-
+                    // 没有找到消息 的长轮询机制处理
                     if (brokerAllowSuspend && hasSuspendFlag) {
                         long pollingTimeMills = suspendTimeoutMillisLong;
                         if (!this.brokerController.getBrokerConfig().isLongPollingEnable()) {
@@ -419,6 +420,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                         String topic = requestHeader.getTopic();
                         long offset = requestHeader.getQueueOffset();
                         int queueId = requestHeader.getQueueId();
+                        // 找不到在创建pull请求放入PullRequestHoldService
                         PullRequest pullRequest = new PullRequest(request, channel, pollingTimeMills,
                             this.brokerController.getMessageStore().now(), offset, subscriptionData, messageFilter);
                         this.brokerController.getPullRequestHoldService().suspendPullRequest(topic, queueId, pullRequest);

@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+
+import com.alibaba.fastjson.JSON;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.ConsumeOrderlyContext;
@@ -100,6 +102,7 @@ public class DefaultMQPushConsumerTest {
             @Override
             public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs,
                 ConsumeConcurrentlyContext context) {
+                System.out.println(JSON.toJSONString(msgs));
                 return null;
             }
         });
@@ -179,6 +182,7 @@ public class DefaultMQPushConsumerTest {
                 ConsumeConcurrentlyContext context) {
                 messageExts[0] = msgs.get(0);
                 countDownLatch.countDown();
+                System.out.println(JSON.toJSONString(msgs)+"===0");
                 return null;
             }
         }));

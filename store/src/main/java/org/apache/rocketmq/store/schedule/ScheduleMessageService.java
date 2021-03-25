@@ -45,6 +45,9 @@ import org.apache.rocketmq.store.PutMessageStatus;
 import org.apache.rocketmq.store.SelectMappedBufferResult;
 import org.apache.rocketmq.store.config.StorePathConfigHelper;
 
+/**
+ * 订阅延时消息的topic
+ */
 public class ScheduleMessageService extends ConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
@@ -117,12 +120,14 @@ public class ScheduleMessageService extends ConfigManager {
             for (Map.Entry<Integer, Long> entry : this.delayLevelTable.entrySet()) {
                 Integer level = entry.getKey();
                 Long timeDelay = entry.getValue();
+                // 消费进度
                 Long offset = this.offsetTable.get(level);
                 if (null == offset) {
                     offset = 0L;
                 }
 
                 if (timeDelay != null) {
+                    // 1秒后开始调度
                     this.timer.schedule(new DeliverDelayedMessageTimerTask(level, offset), FIRST_DELAY_TIME);
                 }
             }
@@ -222,8 +227,13 @@ public class ScheduleMessageService extends ConfigManager {
         return true;
     }
 
+    /**
+     * 延时消息 被scheduleMessageService处理
+     * 默认18个 延时task 都在处理
+     */
     class DeliverDelayedMessageTimerTask extends TimerTask {
         private final int delayLevel;
+        // 初始消费进度为0
         private final long offset;
 
         public DeliverDelayedMessageTimerTask(int delayLevel, long offset) {
@@ -235,11 +245,13 @@ public class ScheduleMessageService extends ConfigManager {
         public void run() {
             try {
                 if (isStarted()) {
+                    // 执行延时任务
                     this.executeOnTimeup();
                 }
             } catch (Exception e) {
                 // XXX: warn and notify me
                 log.error("ScheduleMessageService, executeOnTimeup exception", e);
+                // 线程task异常退出则重新执行
                 ScheduleMessageService.this.timer.schedule(new DeliverDelayedMessageTimerTask(
                     this.delayLevel, this.offset), DELAY_FOR_A_PERIOD);
             }
@@ -261,6 +273,7 @@ public class ScheduleMessageService extends ConfigManager {
         }
 
         public void executeOnTimeup() {
+            // 获取延时主题的指定level对应的consumequeue
             ConsumeQueue cq =
                 ScheduleMessageService.this.defaultMessageStore.findConsumeQueue(SCHEDULE_TOPIC,
                     delayLevel2QueueId(delayLevel));
@@ -292,19 +305,22 @@ public class ScheduleMessageService extends ConfigManager {
                             }
 
                             long now = System.currentTimeMillis();
+                            // tagsCode已经被改写成重试消息应当被消费的时间戳  此处进行一次校准
                             long deliverTimestamp = this.correctDeliverTimestamp(now, tagsCode);
 
                             nextOffset = offset + (i / ConsumeQueue.CQ_STORE_UNIT_SIZE);
-
+                            // 算出消费应该被消费还需要多久
                             long countdown = deliverTimestamp - now;
 
-                            if (countdown <= 0) {
+                            if (countdown <= 0) {// 说明应该被投递
+                                // 获取定时消息对应的消息体
                                 MessageExt msgExt =
                                     ScheduleMessageService.this.defaultMessageStore.lookMessageByOffset(
                                         offsetPy, sizePy);
 
                                 if (msgExt != null) {
                                     try {
+                                        // 根据定时消息处理成新的消息 发回真正的主题 【retry topic或者业务topic】
                                         MessageExtBrokerInner msgInner = this.messageTimeup(msgExt);
                                         if (MixAll.RMQ_SYS_TRANS_HALF_TOPIC.equals(msgInner.getTopic())) {
                                             log.error("[BUG] the real topic of schedule msg is {}, discard the msg. msg={}",
@@ -374,6 +390,7 @@ public class ScheduleMessageService extends ConfigManager {
             } // end of if (cq != null)
 
             ScheduleMessageService.this.timer.schedule(new DeliverDelayedMessageTimerTask(this.delayLevel,
+                // 每100毫秒一次
                 failScheduleOffset), DELAY_FOR_A_WHILE);
         }
 

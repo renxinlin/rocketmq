@@ -40,6 +40,7 @@ public class DefaultMessageFilter implements MessageFilter {
         }
 
         return subscriptionData.getSubString().equals(SubscriptionData.SUB_ALL)
+                // 订阅的tags 的hash值集合是否包含当前的tags hashcode
             || subscriptionData.getCodeSet().contains(tagsCode.intValue());
     }
 

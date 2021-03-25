@@ -29,12 +29,19 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.ConsumeQueueExt;
 
+/**
+ * reput message service 在处理consumequeue和index后会触发
+ * messagearrivingListener.arriving 触发holdservice处理
+ */
 public class PullRequestHoldService extends ServiceThread {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     private static final String TOPIC_QUEUEID_SEPARATOR = "@";
     private final BrokerController brokerController;
     private final SystemClock systemClock = new SystemClock();
-    private ConcurrentMap<String/* topic@queueId */, ManyPullRequest> pullRequestTable =
+    /**
+     * 长轮询的请求集合
+     */
+    private ConcurrentMap<String/* topic@queueId */, ManyPullRequest/*没有拉取到消息的请求集合*/> pullRequestTable =
         new ConcurrentHashMap<String, ManyPullRequest>(1024);
 
     public PullRequestHoldService(final BrokerController brokerController) {

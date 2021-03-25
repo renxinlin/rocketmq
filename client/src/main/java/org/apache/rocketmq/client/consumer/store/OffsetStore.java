@@ -25,6 +25,10 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
 
 /**
  * Offset store interface
+ * 消费进度存储
+ * 1）广播模式：广播模式由于每个消费者都需要消费消息，故消息的进度（最后消费的偏移量可以保存在本地）。
+ * 2）集群模式：由于集群中的消费者只要一个消费消息即可，故消息的消费进度，需要保存在集中点，故 RocketMQ存储在Broker所在的服务器。
+ *
  */
 public interface OffsetStore {
     /**
