@@ -89,25 +89,38 @@ public class MQClientInstance {
     private final static long LOCK_TIMEOUT_MILLIS = 3000;
     private final InternalLogger log = ClientLogger.getLog();
     private final ClientConfig clientConfig;
+    // MQClientInstance在同一台机器上的创建序号
     private final int instanceIndex;
+    // 客户端id
     private final String clientId;
     private final long bootTimestamp = System.currentTimeMillis();
 
-
+    // 消息生产者，也就是在应用程序一端，每个生产者组在同一台应用服务器只需要初始化一个生产者实例
     private final ConcurrentMap<String/* group */, MQProducerInner> producerTable = new ConcurrentHashMap<String, MQProducerInner>();
+    // 消费者，也就是在应用程序一 端  ，每个消费组，在同一台应用服务器只需要初始化一个消费者即可
     private final ConcurrentMap<String/* group */, MQConsumerInner> consumerTable = new ConcurrentHashMap<String, MQConsumerInner>();
+    // 主要是处理运维命令
     private final ConcurrentMap<String/* group */, MQAdminExtInner> adminExtTable = new ConcurrentHashMap<String, MQAdminExtInner>();
 
 
     private final NettyClientConfig nettyClientConfig;
     /**
-     * 与 broker与nameservrer交互
+     * 与 broker与nameservrer交互 MQ 客户端实现类
      */
     private final MQClientAPIImpl mQClientAPIImpl;
+    /**
+     *  管理命令实现类
+     */
     private final MQAdminImpl mQAdminImpl;
+    /**
+     *  主题的路由信息
+     */
     private final ConcurrentMap<String/* Topic */, TopicRouteData> topicRouteTable = new ConcurrentHashMap<String, TopicRouteData>();
     private final Lock lockNamesrv = new ReentrantLock();
     private final Lock lockHeartbeat = new ReentrantLock();
+    /**
+     * 这些信息存在于NameServer,但缓存在本地客户端，供生产者、消费者共同使用
+     */
     private final ConcurrentMap<String/* Broker Name */, HashMap<Long/* brokerId */, String/* address */>> brokerAddrTable =
         new ConcurrentHashMap<String, HashMap<Long, String>>();
     private final ConcurrentMap<String/* Broker Name */, HashMap<String/* address */, Integer>> brokerVersionTable =
@@ -118,8 +131,13 @@ public class MQClientInstance {
             return new Thread(r, "MQClientFactoryScheduledThread");
         }
     });
+    /**
+     * 客户端命令处理器
+     */
     private final ClientRemotingProcessor clientRemotingProcessor;
-
+    /**
+     * 一个MQClientInstance 只会启动一个消息拉取线程
+     */
     private final PullMessageService pullMessageService;
     /**
      *  RebalanceService会每隔20s进行轮询 其根据 获取的此topic所有messageQueue信息
@@ -127,8 +145,15 @@ public class MQClientInstance {
      *  来确定当前client(consumer)应该消费的messageQueue队列情况
      */
     private final RebalanceService rebalanceService;
+
+    /**
+     * 默认的消息生产者
+     */
     private final DefaultMQProducer defaultMQProducer;
     private final ConsumerStatsManager consumerStatsManager;
+    /**
+     * 心跳包发送次数
+     */
     private final AtomicLong sendHeartbeatTimesTotal = new AtomicLong(0);
     private ServiceState serviceState = ServiceState.CREATE_JUST;
     private DatagramSocket datagramSocket;
@@ -271,7 +296,7 @@ public class MQClientInstance {
     }
 
     private void startScheduledTask() {
-        // 获取nameserver
+        // 获取nameserver 每隔2分钟尝试获取一次NameServer地址
         if (null == this.clientConfig.getNamesrvAddr()) {
             this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
@@ -285,7 +310,7 @@ public class MQClientInstance {
                 }
             }, 1000 * 10, 1000 * 60 * 2, TimeUnit.MILLISECONDS);
         }
-
+        // 每隔30S尝试更新主题路由信息
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -298,7 +323,7 @@ public class MQClientInstance {
                 }
             }
         }, 10, this.clientConfig.getPollNameServerInterval(), TimeUnit.MILLISECONDS);
-
+        // 每隔30S 进行Broker心跳检测
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -313,6 +338,7 @@ public class MQClientInstance {
             }
         }, 1000, this.clientConfig.getHeartbeatBrokerInterval(), TimeUnit.MILLISECONDS);
 
+        // 默认每隔5秒持久化ConsumeOffset
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -1016,6 +1042,7 @@ public class MQClientInstance {
     }
 
     public void rebalanceImmediately() {
+        // 唤醒负载线程后执行拉取 传递给消费
         this.rebalanceService.wakeup();
     }
 

@@ -588,7 +588,6 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                                         continue;
                                     }
                                 }
-
                                 return sendResult;
                             default:
                                 break;
@@ -731,7 +730,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
 
         SendMessageContext context = null;
         if (brokerAddr != null) {
-            // 获取broker网络地址
+            // 获取broker网络地址是否开启vip通道
             brokerAddr = MixAll.brokerVIPChannel(this.defaultMQProducer.isSendMessageWithVIPChannel(), brokerAddr);
 
             byte[] prevBody = msg.getBody();
@@ -1223,11 +1222,13 @@ public class DefaultMQProducerImpl implements MQProducerInner {
     public TransactionSendResult sendMessageInTransaction(final Message msg,
                                                           final LocalTransactionExecuter localTransactionExecuter, final Object arg)
             throws MQClientException {
+        // 检查listener是否存在[执行本地事务 和 check本地事务]和producer是不是事务消息producer
         TransactionListener transactionListener = getCheckListener();
         if (null == localTransactionExecuter && null == transactionListener) {
             throw new MQClientException("tranExecutor is null", null);
         }
 
+        // 注意: 事务消息不支持延迟 等特性
         // ignore DelayTimeLevel parameter
         if (msg.getDelayTimeLevel() != 0) {
             MessageAccessor.clearProperty(msg, MessageConst.PROPERTY_DELAY_TIME_LEVEL);
@@ -1236,9 +1237,12 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         Validators.checkMessage(msg, this.defaultMQProducer);
 
         SendResult sendResult = null;
+        // 设置half属性 表明是事务属性
         MessageAccessor.putProperty(msg, MessageConst.PROPERTY_TRANSACTION_PREPARED, "true");
+        // 设置所属的生产者组 【1 broker 向生产者发送回查事务请求根据这个producergroup找到指定channel 2 生产者能找到所有的同一个组的机器实例从而来检查事务状态】
         MessageAccessor.putProperty(msg, MessageConst.PROPERTY_PRODUCER_GROUP, this.defaultMQProducer.getProducerGroup());
         try {
+            // 同步发送
             sendResult = this.send(msg);
         } catch (Exception e) {
             throw new MQClientException("send message Exception", e);
@@ -1252,11 +1256,13 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     if (sendResult.getTransactionId() != null) {
                         msg.putUserProperty("__transactionId__", sendResult.getTransactionId());
                     }
+                    // 没有设置事务id 则用UNIQ_KEY也就是生产者端的msg_id作为事务id
                     String transactionId = msg.getProperty(MessageConst.PROPERTY_UNIQ_CLIENT_MESSAGE_ID_KEYIDX);
                     if (null != transactionId && !"".equals(transactionId)) {
                         msg.setTransactionId(transactionId);
                     }
                     if (null != localTransactionExecuter) {
+                        // 正常发送则执行本地事务
                         localTransactionState = localTransactionExecuter.executeLocalTransactionBranch(msg, arg);
                     } else if (transactionListener != null) {
                         log.debug("Used new transaction API");
@@ -1287,6 +1293,10 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         }
 
         try {
+            // 不管发送是怎么样的 endTransaction都会执行 本地事务执行完毕 向broker提交事务或者回滚事务
+            // 如果本地事务已经commit 则发送提交请求
+            // 如果本地事务已经roll_back 则发送回滚请求
+            // 如果本地事务UNKNOW 则发送unkonw请求 broker端什么都不做
             this.endTransaction(sendResult, localTransactionState, localException);
         } catch (Exception e) {
             log.warn("local transaction execute " + localTransactionState + ", but end broker transaction failed", e);

@@ -194,4 +194,5 @@ public class TagMessageWith1ConsumerIT extends BaseConf {
             consumer.getListener().getAllMsgBody()))
             .containsExactlyElementsIn(MQMessageFactory.getMessageBody(tag2Msgs));
     }
+
 }

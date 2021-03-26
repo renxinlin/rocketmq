@@ -16,6 +16,7 @@
  */
 package org.apache.rocketmq.broker.transaction.queue;
 
+import io.netty.channel.ChannelOption;
 import org.apache.rocketmq.broker.transaction.AbstractTransactionalMessageCheckListener;
 import org.apache.rocketmq.broker.transaction.OperationResult;
 import org.apache.rocketmq.broker.transaction.TransactionalMessageService;
@@ -43,6 +44,9 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 事务消息对外接口
+ */
 public class TransactionalMessageServiceImpl implements TransactionalMessageService {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.TRANSACTION_LOGGER_NAME);
 
@@ -62,6 +66,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
 
     @Override
     public CompletableFuture<PutMessageResult> asyncPrepareMessage(MessageExtBrokerInner messageInner) {
+        // 消息落盘
         return transactionalMessageBridge.asyncPutHalfMessage(messageInner);
     }
 
@@ -134,9 +139,12 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                 return;
             }
             log.debug("Check topic={}, queues={}", topic, msgQueues);
+            // 系统的事务halftopic只有一个队列  所以这里是单循环
             for (MessageQueue messageQueue : msgQueues) {
                 long startTime = System.currentTimeMillis();
+                // 根据half的mq 获取op 的mq
                 MessageQueue opQueue = getOpQueue(messageQueue);
+                //  获取两者消费进度
                 long halfOffset = transactionalMessageBridge.fetchConsumeOffset(messageQueue);
                 long opOffset = transactionalMessageBridge.fetchConsumeOffset(opQueue);
                 log.info("Before check, the queue={} msgOffset={} opOffset={}", messageQueue, halfOffset, opOffset);
@@ -145,9 +153,9 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                         halfOffset, opOffset);
                     continue;
                 }
-
                 List<Long> doneOpOffset = new ArrayList<>();
                 HashMap<Long, Long> removeMap = new HashMap<>();
+                // 填充
                 PullResult pullResult = fillOpRemoveMap(removeMap, opQueue, opOffset, halfOffset, doneOpOffset);
                 if (null == pullResult) {
                     log.error("The queue={} check msgOffset={} with opOffset={} failed, pullResult is null",
@@ -158,7 +166,9 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                 int getMessageNullCount = 1;
                 long newOffset = halfOffset;
                 long i = halfOffset;
+                // 判断消息符合回查条件
                 while (true) {
+                    // 如果执行的时间超过60s则中断
                     if (System.currentTimeMillis() - startTime > MAX_PROCESS_TIME_LIMIT) {
                         log.info("Queue={} process time reach max={}", messageQueue, MAX_PROCESS_TIME_LIMIT);
                         break;
@@ -239,8 +249,10 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                     i++;
                 }
                 if (newOffset != halfOffset) {
+                    // 更新half topic 的消费位点
                     transactionalMessageBridge.updateConsumeOffset(messageQueue, newOffset);
                 }
+                // 更新op half topic 的消费位点
                 long newOpOffset = calculateOpOffset(doneOpOffset, opOffset);
                 if (newOpOffset != opOffset) {
                     transactionalMessageBridge.updateConsumeOffset(opQueue, newOpOffset);

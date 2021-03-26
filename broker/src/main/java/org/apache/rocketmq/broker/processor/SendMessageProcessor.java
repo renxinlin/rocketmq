@@ -307,6 +307,8 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
         msgInner.setReconsumeTimes(requestHeader.getReconsumeTimes() == null ? 0 : requestHeader.getReconsumeTimes());
         CompletableFuture<PutMessageResult> putMessageResult = null;
         Map<String, String> origProps = MessageDecoder.string2messageProperties(requestHeader.getProperties());
+
+        // 获取producer发送的时候设置的事务消息属性[prepare消息  commit消息应该算是普通消息]
         String transFlag = origProps.get(MessageConst.PROPERTY_TRANSACTION_PREPARED);
         //   判断是否允许事务消息存储
         if (transFlag != null && Boolean.parseBoolean(transFlag)) {

@@ -42,6 +42,13 @@ import org.apache.rocketmq.common.protocol.heartbeat.SubscriptionData;
 
 public abstract class RebalanceImpl {
     protected static final InternalLogger log = ClientLogger.getLog();
+    /**
+     *
+     * MessageQueue对应的是topic的消息队列
+     *
+     * 每一个MessageQueue与一个ProcessQueue一一对应
+     *
+     */
     protected final ConcurrentMap<MessageQueue, ProcessQueue> processQueueTable = new ConcurrentHashMap<MessageQueue, ProcessQueue>(64);
     protected final ConcurrentMap<String/* topic */, Set<MessageQueue>> topicSubscribeInfoTable =
         new ConcurrentHashMap<String, Set<MessageQueue>>();
@@ -235,13 +242,21 @@ public abstract class RebalanceImpl {
         return subscriptionInner;
     }
 
+    /**
+     * 负载核心入口实现
+     *
+     * @param topic
+     * @param isOrder
+     */
     private void rebalanceByTopic(final String topic, final boolean isOrder) {
         switch (messageModel) {
+            // 广播模式
             case BROADCASTING: {
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
                 if (mqSet != null) {
                     boolean changed = this.updateProcessQueueTableInRebalance(topic, mqSet, isOrder);
                     if (changed) {
+                        //
                         this.messageQueueChanged(topic, mqSet, mqSet);
                         log.info("messageQueueChanged {} {} {} {}",
                             consumerGroup,
@@ -254,6 +269,7 @@ public abstract class RebalanceImpl {
                 }
                 break;
             }
+            // 集群模式
             case CLUSTERING: {
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
                 List<String> cidAll = this.mQClientFactory.findConsumerIdList(topic, consumerGroup);
@@ -270,7 +286,7 @@ public abstract class RebalanceImpl {
                 if (mqSet != null && cidAll != null) {
                     List<MessageQueue> mqAll = new ArrayList<MessageQueue>();
                     mqAll.addAll(mqSet);
-
+                    // 排序后交给strategy执行分配负载 只要排序算法的入参一样出参永远一样 避免分布式一致性投票的复杂性和可靠性问题
                     Collections.sort(mqAll);
                     Collections.sort(cidAll);
 
@@ -293,7 +309,7 @@ public abstract class RebalanceImpl {
                     if (allocateResult != null) {
                         allocateResultSet.addAll(allocateResult);
                     }
-
+                    // todo 任新林
                     boolean changed = this.updateProcessQueueTableInRebalance(topic, allocateResultSet, isOrder);
                     if (changed) {
                         log.info(
@@ -353,8 +369,10 @@ public abstract class RebalanceImpl {
                     }
                 } else if (pq.isPullExpired()) {
                     switch (this.consumeType()) {
+                        // PULL 模式
                         case CONSUME_ACTIVELY:
                             break;
+                            // PUSH模式
                         case CONSUME_PASSIVELY:
                             pq.setDropped(true);
                             if (this.removeUnnecessaryMessageQueue(mq, pq)) {
@@ -370,7 +388,7 @@ public abstract class RebalanceImpl {
                 }
             }
         }
-
+        // 是否需要重新负载
         List<PullRequest> pullRequestList = new ArrayList<PullRequest>();
         for (MessageQueue mq : mqSet) {
             if (!this.processQueueTable.containsKey(mq)) {
@@ -402,6 +420,7 @@ public abstract class RebalanceImpl {
             }
         }
 
+        // todo 拉取broker消息 交给PullMessageService执行拉取任务
         this.dispatchPullRequest(pullRequestList);
 
         return changed;
