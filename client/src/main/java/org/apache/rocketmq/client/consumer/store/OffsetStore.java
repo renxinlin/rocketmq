@@ -33,6 +33,7 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
 public interface OffsetStore {
     /**
      * Load
+     * 加载  offsets.json 或 offsets.json.bak
      */
     void load() throws MQClientException;
 

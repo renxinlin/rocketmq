@@ -953,6 +953,7 @@ public class DefaultMessageStore implements MessageStore {
         }
 
         boolean result = this.commitLog.appendData(startOffset, data);
+        // 唤醒reput线程
         if (result) {
             this.reputMessageService.wakeup();
         } else {

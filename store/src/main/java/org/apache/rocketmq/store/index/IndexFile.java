@@ -29,14 +29,23 @@ import org.apache.rocketmq.store.MappedFile;
 
 public class IndexFile {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
+    // 每个 hash  槽所占的字节数
     private static int hashSlotSize = 4;
+    // 每条indexFile条目占用字节数
     private static int indexSize = 20;
+    // 用来验证是否是一个有效的索引。
     private static int invalidIndex = 0;
+    // index 文件中 hash 槽的总个数
     private final int hashSlotNum;
+    // indexFile中包含的条目数
     private final int indexNum;
+    // 对应的映射文件
     private final MappedFile mappedFile;
+    // 对应的文件通道
     private final FileChannel fileChannel;
+    // 对应 PageCache
     private final MappedByteBuffer mappedByteBuffer;
+    // IndexHeader,每一个indexfile的头部信息
     private final IndexHeader indexHeader;
 
     public IndexFile(final String fileName, final int hashSlotNum, final int indexNum,

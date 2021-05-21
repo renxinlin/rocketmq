@@ -350,7 +350,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                                     pullRequest.getMessageQueue().getTopic(), pullResult.getMsgFoundList().size());
 
                                 boolean dispatchToConsume = processQueue.putMessage(pullResult.getMsgFoundList());
-                                // 推给消费者线程进行消费
+                                // 推给消费者线程的缓存队列中等待消费线程进行消费
                                 DefaultMQPushConsumerImpl.this.consumeMessageService.submitConsumeRequest(
                                     pullResult.getMsgFoundList(),
                                     processQueue,
@@ -459,15 +459,27 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         );
         try {
             // 真正的拉取消息 异步拉取
+            // 除去定时持久化  这里也会告诉broker持久化
+
             this.pullAPIWrapper.pullKernelImpl(
                 pullRequest.getMessageQueue(),
                 subExpression,
                 subscriptionData.getExpressionType(),
                 subscriptionData.getSubVersion(),
-                pullRequest.getNextOffset(),
+                    // consume queue的offset
+                    pullRequest.getNextOffset(),
                 // 一次拉取多大的消息
                 this.defaultMQPushConsumer.getPullBatchSize(),
+                    /**
+                     * 主要处理如下特性
+                     *   private final static int FLAG_COMMIT_OFFSET = 0x1;
+                     *     private final static int FLAG_SUSPEND = 0x1 << 1;
+                     *     private final static int FLAG_SUBSCRIPTION = 0x1 << 2;
+                     *     private final static int FLAG_CLASS_FILTER = 0x1 << 3;
+                     *     private final static int FLAG_LITE_PULL_MESSAGE = 0x1 << 4;
+                     */
                 sysFlag,
+                // 当前已经到达的消费进度 【注意  由于消息是msgMaptree 是有序的 如果提亲消费了更大的offset消息 这里返回的依旧是最小的offset】
                 commitOffsetValue,
                 // 长轮询的超时时间 15秒
                 BROKER_SUSPEND_MAX_TIME_MILLIS,

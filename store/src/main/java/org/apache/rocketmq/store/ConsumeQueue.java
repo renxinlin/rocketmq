@@ -495,6 +495,16 @@ public class ConsumeQueue {
 
     private void fillPreBlank(final MappedFile mappedFile, final long untilWhere) {
         ByteBuffer byteBuffer = ByteBuffer.allocate(CQ_STORE_UNIT_SIZE);
+        /**
+         * 这里也是内存预热
+         * 如果用堆内存我认为不需要预热 因为byte数组默认就是0  我猜测其可能已经由jvm完成预热功能
+         * long offset
+         * commitlog偏移量，8字节。
+         * int size
+         * 消息体大小 4字节。
+         * long tagsCode
+         * 消息 tags 的 hashcode。
+         */
         byteBuffer.putLong(0L);
         byteBuffer.putInt(Integer.MAX_VALUE);
         byteBuffer.putLong(0L);

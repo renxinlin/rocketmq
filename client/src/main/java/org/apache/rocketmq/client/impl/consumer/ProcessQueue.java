@@ -45,6 +45,13 @@ public class ProcessQueue {
     private final static long PULL_MAX_IDLE_TIME = Long.parseLong(System.getProperty("rocketmq.client.pull.pullMaxIdleTime", "120000"));
     private final InternalLogger log = ClientLogger.getLog();
     private final ReadWriteLock lockTreeMap = new ReentrantReadWriteLock();
+
+    /**
+     * Long offset
+     *
+     * 拉取的消息放在这里
+     * 这是一颗红黑树
+     */
     private final TreeMap<Long, MessageExt> msgTreeMap = new TreeMap<Long, MessageExt>();
     private final AtomicLong msgCount = new AtomicLong();
     private final AtomicLong msgSize = new AtomicLong();
@@ -196,11 +203,20 @@ public class ProcessQueue {
                         MessageExt prev = msgTreeMap.remove(msg.getQueueOffset());
                         if (prev != null) {
                             removedCnt--;
+                            // 所有消息的总长度
                             msgSize.addAndGet(0 - msg.getBody().length);
                         }
                     }
+                    // msgTreeMap还有多少消息
                     msgCount.addAndGet(removedCnt);
 
+                    // 移除自己本批消息后，处理队列中，还存在消息，则返回该处理队列中最小的偏移量，
+                    // 也就是此时返回的偏移量有可能不是消息本身的偏移量，而是处理队列中最小的偏移量
+                    /**
+                     * 优点：防止消息丢失（也就是没有消费到）。
+                     *
+                     * 缺点：会造成消息重复消费
+                     */
                     if (!msgTreeMap.isEmpty()) {
                         result = msgTreeMap.firstKey();
                     }

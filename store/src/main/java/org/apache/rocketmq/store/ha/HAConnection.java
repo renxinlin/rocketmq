@@ -35,7 +35,7 @@ public class HAConnection {
     private final String clientAddr;
     private WriteSocketService writeSocketService;
     private ReadSocketService readSocketService;
-
+    // 读写线程的交互点
     private volatile long slaveRequestOffset = -1;
     private volatile long slaveAckOffset = -1;
 
@@ -78,6 +78,9 @@ public class HAConnection {
         return socketChannel;
     }
 
+    /**
+     * 处理slave请求的读事件
+     */
     class ReadSocketService extends ServiceThread {
         private static final int READ_MAX_BUFFER_SIZE = 1024 * 1024;
         private final Selector selector;
@@ -147,29 +150,33 @@ public class HAConnection {
 
         private boolean processReadEvent() {
             int readSizeZeroTimes = 0;
-
+            // 没有剩余
             if (!this.byteBufferRead.hasRemaining()) {
                 this.byteBufferRead.flip();
                 this.processPosition = 0;
             }
-
+            // 有剩余
             while (this.byteBufferRead.hasRemaining()) {
                 try {
                     int readSize = this.socketChannel.read(this.byteBufferRead);
                     if (readSize > 0) {
                         readSizeZeroTimes = 0;
                         this.lastReadTimestamp = HAConnection.this.haService.getDefaultMessageStore().getSystemClock().now();
+                        // 8字节表示一个完整的心跳包[存储slave最大commitlog位置]
                         if ((this.byteBufferRead.position() - this.processPosition) >= 8) {
+                            // 获取最后一个包处理[前面的包不处理  slave commitlog最后的偏移量为准]
                             int pos = this.byteBufferRead.position() - (this.byteBufferRead.position() % 8);
                             long readOffset = this.byteBufferRead.getLong(pos - 8);
                             this.processPosition = pos;
 
                             HAConnection.this.slaveAckOffset = readOffset;
+                            // 如果首次获取ack偏移量
                             if (HAConnection.this.slaveRequestOffset < 0) {
+                                // slave broker 的请求 拉取数据的偏移量作为该值
                                 HAConnection.this.slaveRequestOffset = readOffset;
                                 log.info("slave[" + HAConnection.this.clientAddr + "] request offset " + readOffset);
                             }
-
+                            // 唤醒同步处理 groupTransferService
                             HAConnection.this.haService.notifyTransferSome(HAConnection.this.slaveAckOffset);
                         }
                     } else if (readSize == 0) {
@@ -190,14 +197,20 @@ public class HAConnection {
         }
     }
 
+    /**
+     * commit log写给slave
+     */
     class WriteSocketService extends ServiceThread {
         private final Selector selector;
         private final SocketChannel socketChannel;
 
         private final int headerSize = 8 + 4;
         private final ByteBuffer byteBufferHeader = ByteBuffer.allocate(headerSize);
+        // 下一次传输的位置
         private long nextTransferFromWhere = -1;
+        // 获取的commitlog数据
         private SelectMappedBufferResult selectMappedBufferResult;
+        // 上一次是否写结束[主要网络连接是非阻塞导致]
         private boolean lastWriteOver = true;
         private long lastWriteTimestamp = System.currentTimeMillis();
 
@@ -215,12 +228,12 @@ public class HAConnection {
             while (!this.isStopped()) {
                 try {
                     this.selector.select(1000);
-
+                    // 收到了拉取请求
                     if (-1 == HAConnection.this.slaveRequestOffset) {
                         Thread.sleep(10);
                         continue;
                     }
-
+                    //
                     if (-1 == this.nextTransferFromWhere) {
                         if (0 == HAConnection.this.slaveRequestOffset) {
                             long masterOffset = HAConnection.this.haService.getDefaultMessageStore().getCommitLog().getMaxOffset();
@@ -266,7 +279,7 @@ public class HAConnection {
                         if (!this.lastWriteOver)
                             continue;
                     }
-
+                    // 获取commitlog数据
                     SelectMappedBufferResult selectResult =
                         HAConnection.this.haService.getDefaultMessageStore().getCommitLogData(this.nextTransferFromWhere);
                     if (selectResult != null) {
@@ -287,7 +300,7 @@ public class HAConnection {
                         this.byteBufferHeader.putLong(thisOffset);
                         this.byteBufferHeader.putInt(size);
                         this.byteBufferHeader.flip();
-
+                        //  传输给slave
                         this.lastWriteOver = this.transferData();
                     } else {
 
@@ -343,7 +356,7 @@ public class HAConnection {
                     throw new Exception("ha master write header error < 0");
                 }
             }
-
+            // 心跳包直接结束
             if (null == this.selectMappedBufferResult) {
                 return !this.byteBufferHeader.hasRemaining();
             }

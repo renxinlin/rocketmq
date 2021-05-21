@@ -465,10 +465,12 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
             response.setRemark("store getMessage return null");
         }
 
-        boolean storeOffsetEnable = brokerAllowSuspend;
+        boolean storeOffsetEnable = brokerAllowSuspend; // broker要允许suspend 长轮询机制 新请求允许 已经suspend的请求不可以
         storeOffsetEnable = storeOffsetEnable && hasCommitOffsetFlag;
         storeOffsetEnable = storeOffsetEnable
             && this.brokerController.getMessageStoreConfig().getBrokerRole() != BrokerRole.SLAVE;
+
+        // 除去消费者定时5s上报消费进度  pullmsg也会上报消费进度
         if (storeOffsetEnable) {
             this.brokerController.getConsumerOffsetManager().commitOffset(RemotingHelper.parseChannelRemoteAddr(channel),
                 requestHeader.getConsumerGroup(), requestHeader.getTopic(), requestHeader.getQueueId(), requestHeader.getCommitOffset());

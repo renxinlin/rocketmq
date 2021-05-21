@@ -46,12 +46,19 @@ public class HAService {
     private final AtomicInteger connectionCount = new AtomicInteger(0);
 
     private final List<HAConnection> connectionList = new LinkedList<>();
-
+    /**
+     * 监听socket连接
+     */
     private final AcceptSocketService acceptSocketService;
 
     private final DefaultMessageStore defaultMessageStore;
-
+    /**
+     * write socket service 等待commitlog追加的时候唤醒线程
+     */
     private final WaitNotifyObject waitNotifyObject = new WaitNotifyObject();
+    /**
+     * 所有slave中最大同步偏移量
+     */
     private final AtomicLong push2SlaveMaxOffset = new AtomicLong(0);
 
     private final GroupTransferService groupTransferService;
@@ -106,9 +113,12 @@ public class HAService {
     // }
 
     public void start() throws Exception {
+        // master
         this.acceptSocketService.beginAccept();
         this.acceptSocketService.start();
+
         this.groupTransferService.start();
+        // slave
         this.haClient.start();
     }
 
@@ -215,6 +225,7 @@ public class HAService {
                                         + sc.socket().getRemoteSocketAddress());
 
                                     try {
+                                        // 服务端监听事件
                                         HAConnection conn = new HAConnection(HAService.this, sc);
                                         conn.start();
                                         HAService.this.addConnection(conn);
@@ -328,14 +339,23 @@ public class HAService {
     class HAClient extends ServiceThread {
         private static final int READ_MAX_BUFFER_SIZE = 1024 * 1024 * 4;
         private final AtomicReference<String> masterAddress = new AtomicReference<>();
-        private final ByteBuffer reportOffset = ByteBuffer.allocate(8);
+
         private SocketChannel socketChannel;
         private Selector selector;
+        // 记录两次写的时间间隔
         private long lastWriteTimestamp = System.currentTimeMillis();
 
+        // 心跳包 所有slave中最大同步偏移量 push2SlaveMaxOffset
+        private final ByteBuffer reportOffset = ByteBuffer.allocate(8);
+        // 汇报当前的最大偏移
         private long currentReportedOffset = 0;
+
+
+        // 指向了当前byteBufferRead中未被解析的commitlog数据包的起点
         private int dispatchPosition = 0;
+        // 接收commitl的buffer
         private ByteBuffer byteBufferRead = ByteBuffer.allocate(READ_MAX_BUFFER_SIZE);
+        // 备份
         private ByteBuffer byteBufferBackup = ByteBuffer.allocate(READ_MAX_BUFFER_SIZE);
 
         public HAClient() throws IOException {
@@ -410,6 +430,7 @@ public class HAService {
                     int readSize = this.socketChannel.read(this.byteBufferRead);
                     if (readSize > 0) {
                         readSizeZeroTimes = 0;
+                        // 处理commitlog
                         boolean result = this.dispatchReadRequest();
                         if (!result) {
                             log.error("HAClient, dispatchReadRequest error");
@@ -437,6 +458,7 @@ public class HAService {
             int readSocketPos = this.byteBufferRead.position();
 
             while (true) {
+                // 获取未被解析包长度
                 int diff = this.byteBufferRead.position() - this.dispatchPosition;
                 if (diff >= msgHeaderSize) {
                     long masterPhyOffset = this.byteBufferRead.getLong(this.dispatchPosition);
@@ -451,17 +473,18 @@ public class HAService {
                             return false;
                         }
                     }
-
+                    // 有完整消息
                     if (diff >= (msgHeaderSize + bodySize)) {
                         byte[] bodyData = new byte[bodySize];
                         this.byteBufferRead.position(this.dispatchPosition + msgHeaderSize);
                         this.byteBufferRead.get(bodyData);
-
+                        // 复制到本地
                         HAService.this.defaultMessageStore.appendToCommitLog(masterPhyOffset, bodyData);
 
                         this.byteBufferRead.position(readSocketPos);
+                        // 推进已读指针
                         this.dispatchPosition += msgHeaderSize + bodySize;
-
+                        // 汇报心跳包[最大的物理偏移]
                         if (!reportSlaveMaxOffsetPlus()) {
                             return false;
                         }
@@ -470,7 +493,21 @@ public class HAService {
                     }
                 }
 
+                // 内存用完 则分配一波
                 if (!this.byteBufferRead.hasRemaining()) {
+
+                    /**
+                     * 原理
+                     * 老的未解析的添加到新开辟的
+                     *
+                     * ---- 已经解析
+                     * ++++ 未解析
+                     * ____ 未使用
+                     * 【----------++++】老
+                     * 【++++__________】 新
+                     *
+                     *
+                     */
                     this.reallocateByteBuffer();
                 }
 
@@ -499,7 +536,6 @@ public class HAService {
             if (null == socketChannel) {
                 String addr = this.masterAddress.get();
                 if (addr != null) {
-
                     SocketAddress socketAddress = RemotingUtil.string2SocketAddress(addr);
                     if (socketAddress != null) {
                         this.socketChannel = RemotingUtil.connect(socketAddress);
@@ -508,7 +544,7 @@ public class HAService {
                         }
                     }
                 }
-
+                // 第一次的commilog当前位置为自身的最大物理偏移量
                 this.currentReportedOffset = HAService.this.defaultMessageStore.getMaxPhyOffset();
 
                 this.lastWriteTimestamp = System.currentTimeMillis();
@@ -550,8 +586,9 @@ public class HAService {
 
             while (!this.isStopped()) {
                 try {
-                    if (this.connectMaster()) {
-
+                    // 连接master
+                    if (this. connectMaster()) {
+                        // 5s/per 心跳上报
                         if (this.isTimeToReportOffset()) {
                             boolean result = this.reportSlaveMaxOffset(this.currentReportedOffset);
                             if (!result) {

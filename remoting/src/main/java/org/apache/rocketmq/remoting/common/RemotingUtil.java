@@ -168,12 +168,18 @@ public class RemotingUtil {
         SocketChannel sc = null;
         try {
             sc = SocketChannel.open();
+            // 连接前是阻塞的
             sc.configureBlocking(true);
+            // 调用close后不再阻塞等待二是立即关闭底层连接
             sc.socket().setSoLinger(false, -1);
+            // 设置小包发送 nagle算法关闭
             sc.socket().setTcpNoDelay(true);
+            // 设置接收缓冲区的消息
             sc.socket().setReceiveBufferSize(1024 * 64);
+            // 设置发送缓冲区的大小
             sc.socket().setSendBufferSize(1024 * 64);
             sc.socket().connect(remote, timeoutMillis);
+            // 连接通了之后是非阻塞的
             sc.configureBlocking(false);
             return sc;
         } catch (Exception e) {

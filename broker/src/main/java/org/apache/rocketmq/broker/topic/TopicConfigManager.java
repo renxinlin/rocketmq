@@ -41,6 +41,14 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 
 /**
+ *
+ * 主从同步 元信息的抽象类
+ * 主从同步主要同步以下四个元信息
+ * ConsumerOffsetManager
+ * ScheduleMessageService
+ * SubscriptionGroupManager
+ * TopicConfigManager
+ *
  * TopicConfigManager: topic管理器. 对应${user.home}/store/config/topics.json文件
  */
 public class TopicConfigManager extends ConfigManager {
