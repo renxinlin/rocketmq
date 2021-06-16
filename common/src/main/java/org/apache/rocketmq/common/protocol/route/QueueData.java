@@ -24,7 +24,15 @@ public class QueueData implements Comparable<QueueData> {
     private String brokerName;
     private int readQueueNums;
     private int writeQueueNums;
+    /**
+     *  读写权限 PermName
+     *  org.apache.rocketmq.common.constant.PermName
+     */
     private int perm;
+
+    /**
+     * Top
+     */
     private int topicSynFlag;
 
     public int getReadQueueNums() {

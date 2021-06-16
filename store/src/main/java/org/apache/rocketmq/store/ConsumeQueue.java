@@ -433,7 +433,7 @@ public class ConsumeQueue {
      *
      * @param offset 需要重构的consumequeue的message的commitlog的物理位置
      * @param size message大小
-     * @param tagsCode
+     * @param tagsCode tag的hashcode
      * @param cqOffset 消息队列的逻辑偏移
      * @return
      */

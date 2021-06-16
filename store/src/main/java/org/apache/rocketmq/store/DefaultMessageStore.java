@@ -1671,8 +1671,8 @@ public class DefaultMessageStore implements MessageStore {
              */
             int destroyMapedFileIntervalForcibly = DefaultMessageStore.this.getMessageStoreConfig().getDestroyMapedFileIntervalForcibly();
             // 默认凌晨4点删除
-            boolean timeup = this.isTimeToDelete();
-            // 磁盘满了则执行删除【commitlog或consumequeue满了都执行删除】
+            boolean timeup = this.isTimeToDelete(); // 匹配规则 只有小时匹配上就执行
+            // 磁盘满了则执行删除【commitlog或consumequeue满了都执行删除】 超过75%
             boolean spacefull = this.isSpaceToDelete();
             // 手动删除 通过调用excuteDeleteFilesManualy方法手工触发过期文件删除
             boolean manualDelete = this.manualDeleteFileSeveralTimes > 0;

@@ -51,15 +51,27 @@ public class NamesrvController {
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryImpl(
         "NSScheduledThread"));
     private final KVConfigManager kvConfigManager;
+
+    /**
+     *  管理broker
+     *  以及topic的路由信息
+     *
+     *  包含相关路由表信息
+     */
     private final RouteInfoManager routeInfoManager;
-
+    /**
+     * netty 服务端 用于接收producer和broker 等的通信请求
+     */
     private RemotingServer remotingServer;
-
+    /**
+     * 用于调用RouteInfoManager处理broker的注册  变更 销毁
+     */
     private BrokerHousekeepingService brokerHousekeepingService;
 
     private ExecutorService remotingExecutor;
 
     private Configuration configuration;
+
     private FileWatchService fileWatchService;
 
     public NamesrvController(NamesrvConfig namesrvConfig, NettyServerConfig nettyServerConfig) {

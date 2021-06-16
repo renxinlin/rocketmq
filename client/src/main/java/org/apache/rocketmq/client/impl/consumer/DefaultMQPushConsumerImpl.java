@@ -671,6 +671,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 // 负载均衡相关实现
                 this.rebalanceImpl.setConsumerGroup(this.defaultMQPushConsumer.getConsumerGroup());
                 this.rebalanceImpl.setMessageModel(this.defaultMQPushConsumer.getMessageModel());
+                // 设置负载策略  AllocateMessageQueueAveragely
                 this.rebalanceImpl.setAllocateMessageQueueStrategy(this.defaultMQPushConsumer.getAllocateMessageQueueStrategy());
                 this.rebalanceImpl.setmQClientFactory(this.mQClientFactory);
                 // pullAPIWrapper，消息拉取API封装类 推拉的本质都是拉取
@@ -734,7 +735,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
             default:
                 break;
         }
-        // 更新订阅信息
+        // 更新订阅信息 会触发rebalance和生产者的TopicPublishInfo更新
         this.updateTopicSubscribeInfoWhenSubscriptionChanged();
         // 检测broker状态
         this.mQClientFactory.checkClientInBroker();
@@ -1129,7 +1130,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
 
     @Override
     public void updateTopicSubscribeInfo(String topic, Set<MessageQueue> info) {
-        Map<String, SubscriptionData> subTable = this.getSubscriptionInner();
+        Map<String/* topic */, SubscriptionData> subTable = this.getSubscriptionInner();
         if (subTable != null) {
             if (subTable.containsKey(topic)) {
                 this.rebalanceImpl.topicSubscribeInfoTable.put(topic, info);
@@ -1139,9 +1140,11 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
 
     @Override
     public boolean isSubscribeTopicNeedUpdate(String topic) {
+        // 包含逻辑信息  比如订阅哪个topic 哪个tag
         Map<String, SubscriptionData> subTable = this.getSubscriptionInner();
         if (subTable != null) {
             if (subTable.containsKey(topic)) {
+                // 表示订阅的实际信息 包含broker messageQueue
                 return !this.rebalanceImpl.topicSubscribeInfoTable.containsKey(topic);
             }
         }

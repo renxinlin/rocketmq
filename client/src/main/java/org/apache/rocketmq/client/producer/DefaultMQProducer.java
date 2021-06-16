@@ -77,7 +77,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     private String createTopicKey = MixAll.AUTO_CREATE_TOPIC_KEY_TOPIC;
 
     /**
-     * Number of queues to create per default topic.
+     *`
      */
     private volatile int defaultTopicQueueNums = 4;
 

@@ -343,7 +343,7 @@ public class MappedFileQueue {
     }
 
     public int deleteExpiredFileByTime(final long expiredTime,
-        final int deleteFilesInterval,
+        final int deleteFilesInterval, // 每个文件删除的时间间隔
         final long intervalForcibly,
         final boolean cleanImmediately) {
         Object[] mfs = this.copyMappedFiles(0);
@@ -366,7 +366,7 @@ public class MappedFileQueue {
                         if (files.size() >= DELETE_FILES_BATCH_MAX) {
                             break;
                         }
-
+                        // 删除下一个的时候缓一缓
                         if (deleteFilesInterval > 0 && (i + 1) < mfsLength) {
                             try {
                                 Thread.sleep(deleteFilesInterval);

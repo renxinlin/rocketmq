@@ -49,7 +49,7 @@ public abstract class RebalanceImpl {
      * 每一个MessageQueue与一个ProcessQueue一一对应
      *
      */
-    protected final ConcurrentMap<MessageQueue, ProcessQueue> processQueueTable = new ConcurrentHashMap<MessageQueue, ProcessQueue>(64);
+    protected final ConcurrentMap<MessageQueue, ProcessQueue/* 消息队列消息容器  拉取时通过pullrequest调用ProcessQueue 进行消息插入  pullrequest的ProcessQueue和此处是一个对象  */> processQueueTable = new ConcurrentHashMap<MessageQueue, ProcessQueue>(64);
     /**
      * 订阅关系
      */
@@ -275,6 +275,7 @@ public abstract class RebalanceImpl {
             // 集群模式
             case CLUSTERING: {
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
+                // 获取consumer group 所有启动的clientId
                 List<String> cidAll = this.mQClientFactory.findConsumerIdList(topic, consumerGroup);
                 if (null == mqSet) {
                     if (!topic.startsWith(MixAll.RETRY_GROUP_TOPIC_PREFIX)) {
@@ -292,9 +293,9 @@ public abstract class RebalanceImpl {
                     // 排序后交给strategy执行分配负载 只要排序算法的入参一样出参永远一样 避免分布式一致性投票的复杂性和可靠性问题
                     Collections.sort(mqAll);
                     Collections.sort(cidAll);
-
+                    // AllocateMessageQueueAveragely
                     AllocateMessageQueueStrategy strategy = this.allocateMessageQueueStrategy;
-
+                    // 表示当前clientId应该消费哪些MessageQueue
                     List<MessageQueue> allocateResult = null;
                     try {
                         allocateResult = strategy.allocate(
@@ -307,12 +308,12 @@ public abstract class RebalanceImpl {
                             e);
                         return;
                     }
-
+                    // 进行一下去重
                     Set<MessageQueue> allocateResultSet = new HashSet<MessageQueue>();
                     if (allocateResult != null) {
                         allocateResultSet.addAll(allocateResult);
                     }
-                    // todo 任新林
+                    //  判断自己的消费是否发生了变化 底层比较重要的是在必要的时候创建PullRequest 而pullRequest被被PuMessage
                     boolean changed = this.updateProcessQueueTableInRebalance(topic, allocateResultSet, isOrder);
                     if (changed) {
                         log.info(

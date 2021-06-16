@@ -85,3 +85,10 @@ public class FAQUrl {
         return errorMessage;
     }
 }
+        Make sure that the producer can connect to a name server and is capable of fetching routing meta info from it.
+
+        Make sure that name servers do contain routing meta info of the topic.
+        You may query the routing meta info from name server through topicRoute using admin tools or web console.
+
+        Make sure that your brokers are sending heartbeats to the same list of name servers your producer is connecting to.
+

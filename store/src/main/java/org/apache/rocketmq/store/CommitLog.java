@@ -58,15 +58,16 @@ public class CommitLog {
     protected final DefaultMessageStore defaultMessageStore;
 
 
+
     /**
      *  GroupCommitService 同步
-     *  FlushRealTimeService 异步
+     *  FlushRealTimeService 异步  private int flushIntervalCommitLog = 500;
      *  刷盘服务1: 不管是同步还是异步刷盘  本质都是跨线程刷盘
      */
     private final FlushCommitLogService flushCommitLogService;
     /**
      * 刷盘服务2: TransientStorePool 开启的时候采用此service进行刷盘服务
-     * CommitRealTimeService
+     * CommitRealTimeService   private int commitIntervalCommitLog = 200;
      */
     //If TransientStorePool enabled, we must flush message to FileChannel at fixed periods
     private final FlushCommitLogService commitLogService;
@@ -902,6 +903,7 @@ public class CommitLog {
                     // 如果之前的commitlog的剩余空间不足以存储 则新开一个commitlog小文件存储
                     unlockMappedFile = mappedFile;
                     // Create a new file, re-write the message startoffset指的是逻辑偏移量
+                    // 到达文件末尾则重新创建一个mappedFile
                     mappedFile = this.mappedFileQueue.getLastMappedFile(0);
                     if (null == mappedFile) {
                         // XXX: warn and notify me
@@ -909,7 +911,7 @@ public class CommitLog {
                         beginTimeInLock = 0;
                         return new PutMessageResult(PutMessageStatus.CREATE_MAPEDFILE_FAILED, result);
                     }
-
+                    // 如果mappedFile空间不够  则新开一个mappedFile 重新追加
                     result = mappedFile.appendMessage(msg, this.appendMessageCallback);
                     break;
                 case MESSAGE_SIZE_EXCEEDED:
