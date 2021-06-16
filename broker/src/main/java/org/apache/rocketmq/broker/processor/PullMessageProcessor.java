@@ -69,7 +69,7 @@ import org.apache.rocketmq.store.config.BrokerRole;
 import org.apache.rocketmq.store.stats.BrokerStatsManager;
 
 /**
- * consumer消息拉取处理器,处理消息的消费
+ * consumer消息拉取处理器,处理消息的消费 只处理这一种类型消息
  */
 public class PullMessageProcessor extends AsyncNettyRequestProcessor implements NettyRequestProcessor {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
@@ -91,6 +91,14 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
         return false;
     }
 
+    /**
+     *
+     * @param channel
+     * @param request
+     * @param brokerAllowSuspend 第一次时默认允许suspend(延迟)
+     * @return
+     * @throws RemotingCommandException
+     */
     private RemotingCommand processRequest(final Channel channel, RemotingCommand request, boolean brokerAllowSuspend)
         throws RemotingCommandException {
         RemotingCommand response = RemotingCommand.createResponseCommand(PullMessageResponseHeader.class);
@@ -121,11 +129,12 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
             response.setRemark("subscription group no permission, " + requestHeader.getConsumerGroup());
             return response;
         }
-
+        // 根据请求头解析出是否允许suspend
         final boolean hasSuspendFlag = PullSysFlag.hasSuspendFlag(requestHeader.getSysFlag());
+        // 是否持久化消费进度
         final boolean hasCommitOffsetFlag = PullSysFlag.hasCommitOffsetFlag(requestHeader.getSysFlag());
         final boolean hasSubscriptionFlag = PullSysFlag.hasSubscriptionFlag(requestHeader.getSysFlag());
-
+        // 15s
         final long suspendTimeoutMillisLong = hasSuspendFlag ? requestHeader.getSuspendTimeoutMillis() : 0;
 
         TopicConfig topicConfig = this.brokerController.getTopicConfigManager().selectTopicConfig(requestHeader.getTopic());
@@ -237,11 +246,13 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
             messageFilter = new ExpressionMessageFilter(subscriptionData, consumerFilterData,
                 this.brokerController.getConsumerFilterManager());
         }
-        // 拉取消息
+        // step 1: 通过defaultmessageStore 拉取消息
         final GetMessageResult getMessageResult =
             this.brokerController.getMessageStore().getMessage(requestHeader.getConsumerGroup(), requestHeader.getTopic(),
                 requestHeader.getQueueId(), requestHeader.getQueueOffset(), requestHeader.getMaxMsgNums(), messageFilter);
+        // step-2: 核心处理
         if (getMessageResult != null) {
+            // step-2.1: 参数设置
             response.setRemark(getMessageResult.getStatus().name());
             responseHeader.setNextBeginOffset(getMessageResult.getNextBeginOffset());
             responseHeader.setMinOffset(getMessageResult.getMinOffset());
@@ -327,7 +338,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                     assert false;
                     break;
             }
-
+            // step-2.2: 消息hook处理
             if (this.hasConsumeMessageHook()) {
                 ConsumeMessageContext context = new ConsumeMessageContext();
                 context.setConsumerGroup(requestHeader.getConsumerGroup());
@@ -371,6 +382,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                 this.executeConsumeMessageHookBefore(context);
             }
 
+            // step-2.3 核心 返回或者挂起进行长轮询或者短轮询
             switch (response.getCode()) {
                 case ResponseCode.SUCCESS:
 
@@ -410,10 +422,14 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                     }
                     break;
                 case ResponseCode.PULL_NOT_FOUND:
-                    // 没有找到消息 的长轮询机制处理
+                    // 没有找到消息 的长轮询机制处理  brokerAllowSuspend第一次为true
                     if (brokerAllowSuspend && hasSuspendFlag) {
+                        // pollingTimeMills即挂起的时间也就是下次处理时间  suspendTimeoutMillisLong为15s
                         long pollingTimeMills = suspendTimeoutMillisLong;
+
+                        // 长轮询没打开
                         if (!this.brokerController.getBrokerConfig().isLongPollingEnable()) {
+                            // pollingTimeMills为1s
                             pollingTimeMills = this.brokerController.getBrokerConfig().getShortPollingTimeMills();
                         }
 
@@ -423,6 +439,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                         // 找不到在创建pull请求放入PullRequestHoldService
                         PullRequest pullRequest = new PullRequest(request, channel, pollingTimeMills,
                             this.brokerController.getMessageStore().now(), offset, subscriptionData, messageFilter);
+                        // 演出处理
                         this.brokerController.getPullRequestHoldService().suspendPullRequest(topic, queueId, pullRequest);
                         response = null;
                         break;

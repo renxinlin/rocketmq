@@ -58,6 +58,9 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
     private final String consumerGroup;
 
     private final ScheduledExecutorService scheduledExecutorService;
+    /**
+     * 默认processQueue中 15分钟没有处理完毕的消息会被清理掉
+     */
     private final ScheduledExecutorService cleanExpireMsgExecutors;
 
     public ConsumeMessageConcurrentlyService(DefaultMQPushConsumerImpl defaultMQPushConsumerImpl,
@@ -213,6 +216,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
                 this.submitConsumeRequestLater(consumeRequest);
             }
         } else {
+            // 默认拉取32条但是一次只消费1条
             for (int total = 0; total < msgs.size(); ) {
                 List<MessageExt> msgThis = new ArrayList<MessageExt>(consumeBatchSize);
                 for (int i = 0; i < consumeBatchSize; i++, total++) {
@@ -248,6 +252,11 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
         }
     }
 
+
+
+
+
+
     public void processConsumeResult(
         final ConsumeConcurrentlyStatus status,
         final ConsumeConcurrentlyContext context,
@@ -257,7 +266,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
 
         if (consumeRequest.getMsgs().isEmpty())
             return;
-
+        // 处理统计信息 以及计算ackIndex
         switch (status) {
             case CONSUME_SUCCESS:
                 if (ackIndex >= consumeRequest.getMsgs().size()) {
@@ -276,7 +285,8 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
             default:
                 break;
         }
-        // 如果是消费失败，根据消费模式（集群消费还是广播消费），广播模式，直接丢弃，集群模式发送 sendMessageBack
+
+        // 核心: 重试逻辑:  如果是消费失败，根据消费模式（集群消费还是广播消费），广播模式，直接丢弃，集群模式发送 sendMessageBack
         switch (this.defaultMQPushConsumer.getMessageModel()) {
             case BROADCASTING:
                 for (int i = ackIndex + 1; i < consumeRequest.getMsgs().size(); i++) {
@@ -285,17 +295,19 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
                 }
                 break;
             case CLUSTERING:
+                // 根据ack index 来决定是否发送到重试队列 %RETRY%+consumeGroup
                 List<MessageExt> msgBackFailed = new ArrayList<MessageExt>(consumeRequest.getMsgs().size());
                 for (int i = ackIndex + 1; i < consumeRequest.getMsgs().size(); i++) {
                     MessageExt msg = consumeRequest.getMsgs().get(i);
                     // 集群模式消费失败需要重发消息
                     boolean result = this.sendMessageBack(msg, context);
+                    // 如果发送到重试队列失败 则需要兜底重新消费
                     if (!result) {
                         msg.setReconsumeTimes(msg.getReconsumeTimes() + 1);
                         msgBackFailed.add(msg);
                     }
                 }
-
+                // 进行兜底消费
                 if (!msgBackFailed.isEmpty()) {
                     consumeRequest.getMsgs().removeAll(msgBackFailed);
                     // 这里需要注意 如果sendMessageBack 发送失败 则会尝试[延迟5s]重新消费
@@ -305,7 +317,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
             default:
                 break;
         }
-
+        // 移除ProcessQueue中处理过的消息
         long offset = consumeRequest.getProcessQueue().removeMessage(consumeRequest.getMsgs());
         // 不管消费成功与否 都会更新消费进度 【对于broker来说 没有失败 消息都会消费成功，其实就是修改消费偏移量，consume端消费失败的会在重试主题消费新的消息】
         if (offset >= 0 && !consumeRequest.getProcessQueue().isDropped()) {
@@ -368,7 +380,13 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
         }, 5000, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     *
+     */
     class ConsumeRequest implements Runnable {
+        /**
+         * 拉取的32条消息按照消费端一次消费的量拆分成n（一般1条）条存储在此处
+         */
         private final List<MessageExt> msgs;
         private final ProcessQueue processQueue;
         private final MessageQueue messageQueue;
@@ -469,7 +487,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
             ConsumeMessageConcurrentlyService.this.getConsumerStatsManager()
                 .incConsumeRT(ConsumeMessageConcurrentlyService.this.consumerGroup, messageQueue.getTopic(), consumeRT);
 
-            // 处理重试逻辑【retry_consume_topic】
+            // 根据ackIndex 处理重试逻辑【retry_consume_topic】
             if (!processQueue.isDropped()) {
                 ConsumeMessageConcurrentlyService.this.processConsumeResult(status, context, this);
             } else {
