@@ -137,14 +137,14 @@ public class ExpressionMessageFilter implements MessageFilter {
             return true;
         }
 
-        if (tempProperties == null && msgBuffer != null) {
+        if (tempProperties == null && msgBuffer != null) { // 从消息体中解码出属性。
             tempProperties = MessageDecoder.decodeProperties(msgBuffer);
         }
 
         Object ret = null;
         try {
             MessageEvaluationContext context = new MessageEvaluationContext(tempProperties);
-
+        // 代码@2：然后对表达式进行匹配，上下文环境为消息体中的属性，如果匹配，则返回true,否则返回false。
             ret = realFilterData.getCompiledExpression().evaluate(context);
         } catch (Throwable e) {
             log.error("Message Filter error, " + realFilterData + ", " + tempProperties, e);

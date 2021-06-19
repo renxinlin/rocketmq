@@ -107,6 +107,7 @@ public class DefaultMQPushConsumerTest {
             }
         });
 
+
         DefaultMQPushConsumerImpl pushConsumerImpl = pushConsumer.getDefaultMQPushConsumerImpl();
         PowerMockito.suppress(PowerMockito.method(DefaultMQPushConsumerImpl.class, "updateTopicSubscribeInfoWhenSubscriptionChanged"));
         rebalancePushImpl = spy(new RebalancePushImpl(pushConsumer.getDefaultMQPushConsumerImpl()));
@@ -115,6 +116,29 @@ public class DefaultMQPushConsumerTest {
         field.set(pushConsumerImpl, rebalancePushImpl);
 
         pushConsumer.subscribe(topic, "*");
+        // msg.putUserProperty("a", String.valueOf(i));  ||   msg.putUserProperty("b", "smart artisan");
+        // pushConsumer.subscribe("",MessageSelector.bySql("a between 0 and 3 and b = 'artisan'"));
+        /**
+         * public class MessageFilterImpl implements MessageFilter{//注意实现过滤器接口
+         *
+         *     public boolean match(MessageExt msg, FilterContext arg1) {
+         *          // NO Chinese
+         *         String property = msg.getUserProperty("SequenceId");
+         *         System.out.println("---------" + property);
+         *         if (property != null) {
+         *             int id = Integer.parseInt(property);
+         *             if((id % 2) == 0) {
+         *             //if ((id % 3) == 0 && (id > 10)) {
+         *                 return true;
+         *             }
+         *         }
+         *         return false;
+         *     }
+         * }
+         */
+        // topic  class全路径类名   class源码位置 （必须实现org.apache.rocketmq.common.filter.MessageFilter）
+        // pushConsumer.subscribe("topic","exercise1.filter.MessageFilterImpl","/user/mac/MessageFilterImpl.java");
+
         pushConsumer.start();
 
         mQClientFactory = spy(pushConsumerImpl.getmQClientFactory());

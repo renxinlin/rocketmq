@@ -526,6 +526,7 @@ public class MQClientInstance {
         if (this.lockHeartbeat.tryLock()) {
             try {
                 this.sendHeartbeatToAllBroker();
+                // 消息过滤: 基于class filter 模式则进行filterclass源码上传
                 this.uploadFilterClassSource();
             } catch (final Exception e) {
                 log.error("sendHeartbeatToAllBroker exception", e);
@@ -637,12 +638,14 @@ public class MQClientInstance {
     }
 
     private void uploadFilterClassSource() {
+        // 获取所有的消费者组
         Iterator<Entry<String, MQConsumerInner>> it = this.consumerTable.entrySet().iterator();
         while (it.hasNext()) {
-            Entry<String, MQConsumerInner> next = it.next();
+            Entry<String/* 消费者组 */, MQConsumerInner/* 消费者实例 */> next = it.next();
             MQConsumerInner consumer = next.getValue();
             if (ConsumeType.CONSUME_PASSIVELY == consumer.consumeType()) {
                 Set<SubscriptionData> subscriptions = consumer.subscriptions();
+                // 获取每个消费者组的订阅信息
                 for (SubscriptionData sub : subscriptions) {
                     if (sub.isClassFilterMode() && sub.getFilterClassSource() != null) {
                         final String consumerGroup = consumer.groupName();
@@ -650,6 +653,7 @@ public class MQClientInstance {
                         final String topic = sub.getTopic();
                         final String filterClassSource = sub.getFilterClassSource();
                         try {
+                            // 上传 所有的class信息
                             this.uploadFilterClassToAllFilterServer(consumerGroup, className, topic, filterClassSource);
                         } catch (Exception e) {
                             log.error("uploadFilterClassToAllFilterServer Exception", e);
@@ -838,12 +842,14 @@ public class MQClientInstance {
         TopicRouteData topicRouteData = this.topicRouteTable.get(topic);
         if (topicRouteData != null
             && topicRouteData.getFilterServerTable() != null && !topicRouteData.getFilterServerTable().isEmpty()) {
-            Iterator<Entry<String, List<String>>> it = topicRouteData.getFilterServerTable().entrySet().iterator();
+            // 每一个broker有多个filterserver TODO 有多少 什么规则 renxl 后期在看
+            Iterator<Entry<String/*broker */, List<String>/*filter servers */>> it = topicRouteData.getFilterServerTable().entrySet().iterator();
             while (it.hasNext()) {
                 Entry<String, List<String>> next = it.next();
                 List<String> value = next.getValue();
-                for (final String fsAddr : value) {
+                for (final String fsAddr /* filter server address*/ : value) {
                     try {
+                        // 对所有的broker 的所有filter server进行上传过滤类信息
                         this.mQClientAPIImpl.registerMessageFilterClass(fsAddr, consumerGroup, topic, fullClassName, classCRC, classBody,
                             5000);
 

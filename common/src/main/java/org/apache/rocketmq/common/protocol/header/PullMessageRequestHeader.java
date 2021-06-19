@@ -43,7 +43,7 @@ public class PullMessageRequestHeader implements CommandCustomHeader {
     @CFNotNull
     private Long suspendTimeoutMillis;
     @CFNullable
-    private String subscription;
+    private String subscription;/* 例如SQL92表达式，或过滤类全路径名 */
     @CFNotNull
     private Long subVersion;
     private String expressionType;

@@ -75,8 +75,9 @@ public class ConsumerFilterManager extends ConfigManager {
      * @return maybe null
      */
     public static ConsumerFilterData build(final String topic, final String consumerGroup,
-        final String expression, final String type,
+        final String expression/* 例如SQL92表达式，或过滤类全路径名 */, final String type,
         final long clientVersion) {
+        //  ConsumerFilterData 只针对SQL92 模式
         if (ExpressionType.isTagType(type)) {
             return null;
         }

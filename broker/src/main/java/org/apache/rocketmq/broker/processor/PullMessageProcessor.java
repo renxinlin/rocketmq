@@ -249,7 +249,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
         // step 1: 通过defaultmessageStore 拉取消息
         final GetMessageResult getMessageResult =
             this.brokerController.getMessageStore().getMessage(requestHeader.getConsumerGroup(), requestHeader.getTopic(),
-                requestHeader.getQueueId(), requestHeader.getQueueOffset(), requestHeader.getMaxMsgNums(), messageFilter);
+                requestHeader.getQueueId(), requestHeader.getQueueOffset(), requestHeader.getMaxMsgNums(), messageFilter/* 根据consumerFilterData 构建messageFilter 实现消息过滤*/);
         // step-2: 核心处理
         if (getMessageResult != null) {
             // step-2.1: 参数设置
