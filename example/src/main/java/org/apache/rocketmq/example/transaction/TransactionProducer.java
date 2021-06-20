@@ -35,6 +35,9 @@ public class TransactionProducer {
         TransactionListener transactionListener = new TransactionListenerImpl();
         TransactionMQProducer producer = new TransactionMQProducer("please_rename_unique_group_name");
         // 封装了一个线程池
+        /**
+         * 客户端事务消息状态检测线程，我们可以大胆的猜测一下是不是这个线程池调用TransactionListener方法，完成对事务消息的检测呢
+         */
         ExecutorService executorService = new ThreadPoolExecutor(2, 5, 100, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(2000), new ThreadFactory() {
             @Override
             public Thread newThread(Runnable r) {
@@ -45,6 +48,7 @@ public class TransactionProducer {
         });
 
         producer.setExecutorService(executorService);
+        // 事务消息发送者设置事务监听器
         producer.setTransactionListener(transactionListener);
         producer.start();
 

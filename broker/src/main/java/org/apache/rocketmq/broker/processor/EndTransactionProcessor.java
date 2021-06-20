@@ -139,7 +139,7 @@ public class EndTransactionProcessor extends AsyncNettyRequestProcessor implemen
                     msgInner.setPreparedTransactionOffset(requestHeader.getCommitLogOffset());
                     msgInner.setStoreTimestamp(result.getPrepareMessage().getStoreTimestamp());
                     MessageAccessor.clearProperty(msgInner, MessageConst.PROPERTY_TRANSACTION_PREPARED);
-                    // 落盘commit消息 [消费者可消费]
+                    // 落盘commit消息 [消费者可消费] 发送到真实主题
                     RemotingCommand sendResult = sendFinalMessage(msgInner);
                     // 删除prepare消息[注意commitlog是appendOnly的操作  这里的删除实现如下]
                     // 消息放入RMQ_SYS_TRANS_OP_HALF_TOPIC的主题 ， OP_HALF_TOPIC与half_topic一对一

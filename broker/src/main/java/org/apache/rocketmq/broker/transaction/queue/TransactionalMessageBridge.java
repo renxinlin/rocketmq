@@ -218,7 +218,7 @@ public class TransactionalMessageBridge {
         // 此时在设置类型为普通消息 [构建逻辑队列的时候如果是事务类型消息会跳过  这里转一下 用户构建逻辑队列]
         msgInner.setSysFlag(
             MessageSysFlag.resetTransactionValue(msgInner.getSysFlag(), MessageSysFlag.TRANSACTION_NOT_TYPE));
-        // 设置到事务消息topic: RMQ_SYS_TRANS_HALF_TOPIC
+        // 设置到事务消息topic: RMQ_SYS_TRANS_HALF_TOPIC  half队列名称
         msgInner.setTopic(TransactionalMessageUtil.buildHalfTopic());
         // half消息只有一个队列 设置成0
         msgInner.setQueueId(0);

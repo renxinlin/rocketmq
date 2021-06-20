@@ -72,6 +72,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
 
     @Override
     public PutMessageResult prepareMessage(MessageExtBrokerInner messageInner) {
+        //
         return transactionalMessageBridge.putHalfMessage(messageInner);
     }
 
